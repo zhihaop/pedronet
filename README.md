@@ -1,4 +1,4 @@
-# Pedronet 网络库
+# Pedronet: An event-driven network library for multi-threaded in C++17
 
 ## 简介
 
