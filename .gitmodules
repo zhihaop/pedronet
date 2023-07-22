@@ -1,0 +1,3 @@
+[submodule "deps/pedrolib"]
+	path = deps/pedrolib
+	url = git@github.com:zhihaop/pedrolib.git
