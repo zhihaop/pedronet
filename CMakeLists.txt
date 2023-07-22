@@ -3,7 +3,10 @@ project(pedronet)
 
 file(GLOB_RECURSE PEDRONET_SRCS src/*.cc)
 
-add_subdirectory(deps/pedrolib)
+if (NOT TARGET pedrolib)
+    add_subdirectory(deps/pedrolib)
+endif()
+
 add_library(pedronet SHARED ${PEDRONET_SRCS})
 target_compile_features(pedronet PRIVATE cxx_std_17)
 target_include_directories(pedronet PUBLIC include)
