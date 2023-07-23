@@ -1149,14 +1149,18 @@ vm.lowmem_reserve_ratio = 256   256     32      0       0
 
 ### 对比对象
 
+PingPong 是一种场景的网络性能测试方法，客户端和服务端之间将同步地，不停发送固定大小的消息包，并且客户端和服务端发送内容应和其接收的内容一致。我们在 localhost 采用 PingPong 作为测试方法。每次消息大小分别为 1K，64K，1M。我们将与下列网络库对比 PingPong 的性能。
 - **muduo：** Event-driven network library for multithreaded Linux server in C++11
 - **netty：** An asynchronous event-driven network application framework
 - **asio：** A cross-platform C++ library for network and low-level I/O programming
 
-### 实验结果
 
-我们采用 PingPong 作为测试方法。每次消息大小分别为 1K，64K，1M。可以发现，消息体大小为 64 K时，吞吐量最大。消息体大小为 1K
-时，asio 取得最好的吞吐量。消息体大小为 64K 时，muduo 略占上风。当消息体大小为 1M 时，来自 Java 的 netty 框架吞吐量最高。
+### 实验结果
+- 消息体大小为 64 K时，吞吐量最大。
+- 消息体大小为 1K时，asio 取得最好的吞吐量。
+- 消息体大小为 64K 时，muduo 略占上风。
+- 当消息体大小为 1M 时，来自 Java 的 netty 框架吞吐量最高。
+- Pedronet 在上述情况都有良好的性能表现。
 
 |          | 1K (MiB/s) | 1K (Msg/s) | 64K (MiB/s) | 64K (Msg/s) | 1M (MiB/s) | 1M (Msg/s) |
 |----------|------------|------------|-------------|-------------|------------|------------|
