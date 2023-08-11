@@ -1,9 +1,10 @@
 #include <pedrolib/concurrent/latch.h>
 #include <pedrolib/logger/logger.h>
 #include <pedronet/eventloop.h>
-#include <pedronet/selector/epoller.h>
 #include <pedronet/logger/logger.h>
+#include <pedronet/selector/epoller.h>
 #include <future>
+#include <vector>
 
 using pedrolib::Latch;
 using pedrolib::Logger;
@@ -16,21 +17,25 @@ int main() {
   Logger logger("bench");
   logger.SetLevel(Logger::Level::kTrace);
   pedronet::logger::SetLevel(Logger::Level::kWarn);
-  auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
+  std::vector<std::future<void>> defers;
+  
+  defers.emplace_back(std::async(std::launch::async, [&] { executor.Loop(); }));
 
-  int n = 1e7 + 5;
+  int n = 1000000;
+  int m = 16;
   std::atomic<int> counter = 0;
+  Latch latch(m);
 
-  Latch latch(1);
   logger.Info("bench start");
-  for (int i = 0; i < n; ++i) {
-    executor.Schedule([&] {
-      counter++;
-      if (counter == n) {
-        latch.CountDown();
+  for (int p = 0; p < m; ++p) {
+    defers.emplace_back(std::async(std::launch::async, [&] {
+      for (int i = 0; i < n; ++i) {
+        executor.Schedule([&] { counter++; });
       }
-    });
+      executor.Schedule([&] { latch.CountDown(); });
+    }));
   }
+
   latch.Await();
   logger.Info("bench end: {}", counter.load());
   executor.Close();
