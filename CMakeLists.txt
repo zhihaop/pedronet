@@ -9,7 +9,7 @@ endif()
 
 add_library(pedronet SHARED ${PEDRONET_SRCS})
 target_compile_features(pedronet PRIVATE cxx_std_17)
-target_include_directories(pedronet PUBLIC include)
+target_include_directories(pedronet PUBLIC include deps/concurrentqueue)
 target_link_libraries(pedronet PRIVATE pedrolib)
 
 add_executable(test_tcp_server test/test_tcp_server.cc)

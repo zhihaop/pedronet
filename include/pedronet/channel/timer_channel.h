@@ -10,16 +10,14 @@ namespace pedronet {
 class TimerChannel final : public Channel {
   inline static const Duration kMinWakeUpDuration = Duration::Microseconds(100);
 
-  SelectorCallback event_callback_;
+  Callback event_callback_;
   File file_;
 
  public:
   TimerChannel();
   ~TimerChannel() override = default;
 
-  void SetEventCallBack(SelectorCallback cb) {
-    event_callback_ = std::move(cb);
-  }
+  void SetEventCallBack(Callback cb) { event_callback_ = std::move(cb); }
 
   void HandleEvents(ReceiveEvents events, Timestamp now) override;
 

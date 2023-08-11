@@ -14,13 +14,13 @@ inline static File CreateTimerFile() {
 
 TimerChannel::TimerChannel() : Channel(), file_(CreateTimerFile()) {}
 
-void TimerChannel::HandleEvents(ReceiveEvents events, Timestamp now) {
+void TimerChannel::HandleEvents(ReceiveEvents, Timestamp) {
   uint64_t val;
   if (file_.Read(&val, sizeof(val)) != sizeof(val)) {
     PEDRONET_FATAL("failed to read timer fd: {}", file_.GetError());
   }
   if (event_callback_) {
-    event_callback_(events, now);
+    event_callback_();
   }
 }
 

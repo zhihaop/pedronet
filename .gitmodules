@@ -1,3 +1,6 @@
 [submodule "deps/pedrolib"]
 	path = deps/pedrolib
 	url = git@github.com:zhihaop/pedrolib.git
+[submodule "deps/concurrentqueue"]
+	path = deps/concurrentqueue
+	url = https://github.com/cameron314/concurrentqueue.git

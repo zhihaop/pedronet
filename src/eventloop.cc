@@ -3,19 +3,6 @@
 
 namespace pedronet {
 
-void EventLoop::ProcessScheduleTask() {
-  std::unique_lock<std::mutex> lock(mu_);
-  std::swap(running_tasks_, pending_tasks_);
-  lock.unlock();
-
-  while (!running_tasks_.empty()) {
-    auto task = std::move(running_tasks_.front());
-    running_tasks_.pop();
-
-    task();
-  }
-}
-
 void EventLoop::Loop() {
   PEDRONET_TRACE("EventLoop::Loop() running");
 
@@ -23,7 +10,7 @@ void EventLoop::Loop() {
   current.BindEventLoop(this);
 
   SelectChannels selected;
-  while (state()) {
+  while (state_ & kLooping) {
     auto err = selector_->Wait(kSelectTimeout, &selected);
     if (!err.Empty()) {
       PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
@@ -42,7 +29,7 @@ void EventLoop::Loop() {
 }
 
 void EventLoop::Close() {
-  state_ = 0;
+  state_.fetch_and(~kLooping);
 
   PEDRONET_TRACE("EventLoop is shutting down.");
   event_channel_.WakeUp();
@@ -50,14 +37,7 @@ void EventLoop::Close() {
 }
 
 void EventLoop::Schedule(Callback cb) {
-  PEDRONET_TRACE("submit task");
-  std::unique_lock<std::mutex> lock(mu_);
-  pending_tasks_.emplace(std::move(cb));
-  size_t n = pending_tasks_.size();
-
-  if (n == 1) {
-    event_channel_.WakeUp();
-  }
+  event_queue_.Add(std::move(cb));
 }
 
 void EventLoop::AssertUnderLoop() const {
@@ -107,10 +87,14 @@ void EventLoop::Deregister(Channel* channel) {
 }
 
 EventLoop::EventLoop(std::unique_ptr<Selector> selector)
-    : selector_(std::move(selector)), timer_queue_(timer_channel_, *this) {
-  event_channel_.SetEventCallBack([this]() { ProcessScheduleTask(); });
+    : selector_(std::move(selector)),
+      event_queue_(&event_channel_),
+      timer_queue_(&timer_channel_) {
   selector_->Add(&event_channel_, SelectEvents::kReadEvent);
   selector_->Add(&timer_channel_, SelectEvents::kReadEvent);
+
+  event_channel_.SetEventCallBack([this] { event_queue_.Process(); });
+  timer_channel_.SetEventCallBack([this] { timer_queue_.Process(); });
 
   PEDRONET_TRACE("create event loop");
 }
