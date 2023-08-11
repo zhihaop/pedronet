@@ -6,35 +6,41 @@
 
 using namespace std::chrono_literals;
 using pedrolib::Duration;
+using pedrolib::Logger;
 using pedronet::EpollSelector;
+using pedronet::EventLoop;
 using pedronet::EventLoopGroup;
-namespace logger = pedronet::logger;
 
 int main() {
-  logger::SetLevel(logger::Level::kInfo);
+  pedronet::logger::SetLevel(Logger::Level::kInfo);
 
-  auto group = EventLoopGroup::Create<EpollSelector>(12);
+  Logger logger("test");
+  logger.SetLevel(Logger::Level::kTrace);
 
-  group->Schedule([] { std::cout << "hello world" << std::endl; });
+  EventLoop executor(std::make_unique<EpollSelector>());
 
   for (int i = 0; i < 5; ++i) {
-    group->Schedule([=] { std::cout << "hello world" << i << std::endl; });
+    executor.Schedule([&, i] { logger.Info("schedule {}", i); });
   }
 
   int i = 0;
-  auto id = group->ScheduleEvery(500ms, 500ms, [&] {
-    std::cout << "hello world timer 1:" << ++i << std::endl;
+  auto id = executor.ScheduleEvery(500ms, 500ms, [&] {
+    logger.Info("hello world timer 1[{}]", ++i);
   });
 
   int j = 0;
-  group->ScheduleEvery(0ms, 1000ms, [&] {
-    std::cout << "hello world timer 2:" << ++j << std::endl;
+  executor.ScheduleEvery(0ms, 1000ms, [&] {
+    logger.Info("hello world timer 2[{}]", ++j);
     if (j == 15) {
-      group->ScheduleCancel(id);
+      logger.Info("shutdown timer 1");
+      executor.ScheduleCancel(id);
     }
     if (j == 20) {
-      group->Close();
+      logger.Info("close");
+      executor.Close();
     }
   });
+
+  executor.Loop();
   return 0;
 }
