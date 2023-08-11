@@ -19,21 +19,22 @@ namespace pedronet {
 class EventLoop : public Executor {
   inline const static Duration kSelectTimeout{std::chrono::seconds(10)};
 
+  enum State {
+    kLooping = 1 << 0,
+  };
+
   std::unique_ptr<Selector> selector_;
   EventChannel event_channel_;
   TimerChannel timer_channel_;
   TimerQueue timer_queue_;
 
+  std::atomic_size_t size_{0};
   moodycamel::ConcurrentQueue<Callback> callbacks_;
 
-  std::atomic_int32_t state_{1};
+  std::atomic_int32_t state_{kLooping};
   std::unordered_map<Channel*, Callback> channels_;
 
   pedrolib::Latch close_latch_{1};
-
-  int32_t state() const noexcept {
-    return state_.load(std::memory_order_acquire);
-  }
   
   void ProcessScheduleTask();
 
@@ -77,7 +78,7 @@ class EventLoop : public Executor {
     Schedule(std::forward<Runnable>(runnable));
   }
 
-  bool Closed() const noexcept { return state() == 0; }
+  bool Closed() const noexcept { return (state_ & kLooping) == 0; }
 
   void Close() override;
 

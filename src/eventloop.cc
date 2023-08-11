@@ -6,7 +6,12 @@ namespace pedronet {
 void EventLoop::ProcessScheduleTask() {
   Callback callback;
   while (callbacks_.try_dequeue(callback)) {
+    size_--;
     callback();
+  }
+
+  if (size_ != 0) {
+    event_channel_.WakeUp();
   }
 }
 
@@ -17,7 +22,7 @@ void EventLoop::Loop() {
   current.BindEventLoop(this);
 
   SelectChannels selected;
-  while (state()) {
+  while (state_ & kLooping) {
     auto err = selector_->Wait(kSelectTimeout, &selected);
     if (!err.Empty()) {
       PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
@@ -36,7 +41,7 @@ void EventLoop::Loop() {
 }
 
 void EventLoop::Close() {
-  state_ = 0;
+  state_.fetch_and(~kLooping);
 
   PEDRONET_TRACE("EventLoop is shutting down.");
   event_channel_.WakeUp();
@@ -46,11 +51,13 @@ void EventLoop::Close() {
 void EventLoop::Schedule(Callback cb) {
   PEDRONET_TRACE("submit task");
 
-  while (!callbacks_.enqueue(cb)) {
+  while (!callbacks_.enqueue(std::move(cb))) {  // NOLINT: no move if failed.
     std::this_thread::yield();
   }
 
-  event_channel_.WakeUp();
+  if (size_++ == 0) {
+    event_channel_.WakeUp();
+  }
 }
 
 void EventLoop::AssertUnderLoop() const {
