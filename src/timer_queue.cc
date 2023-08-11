@@ -1,13 +1,15 @@
-#include "pedronet/timer_queue.h"
+#include "pedronet/queue/timer_queue.h"
 #include "pedronet/logger/logger.h"
 
 namespace pedronet {
+
 void TimerQueue::updateExpire(Timestamp) {
   if (schedule_timer_.empty() || next_expire_ <= schedule_timer_.top().expire) {
     return;
   }
-  channel_.WakeUpAt(schedule_timer_.top().expire);
+  channel_->WakeUpAt(schedule_timer_.top().expire);
 }
+
 void TimerQueue::selectExpiredTimer(Timestamp now) {
   PEDRONET_TRACE("select timers, size[{}]", schedule_timer_.size());
   while (!schedule_timer_.empty() && schedule_timer_.top().expire <= now) {
@@ -16,6 +18,7 @@ void TimerQueue::selectExpiredTimer(Timestamp now) {
     expired_timers_.emplace(std::move(timer));
   }
 }
+
 void TimerQueue::processExpireTimer() {
   PEDRONET_TRACE("invoke expire timers[{}]", expired_timers_.size());
 
@@ -37,6 +40,7 @@ void TimerQueue::processExpireTimer() {
     pending_timers_.emplace(std::move(weak_timer));
   }
 }
+
 void TimerQueue::processPendingTimer(Timestamp now) {
   while (!pending_timers_.empty()) {
     auto weak_timer = std::move(pending_timers_.front());
@@ -59,21 +63,7 @@ void TimerQueue::processPendingTimer(Timestamp now) {
   updateExpire(now);
 }
 
-TimerQueue::TimerQueue(TimerChannel& channel, Executor& executor)
-    : channel_(channel), executor_(executor) {
-  channel.SetEventCallBack([this](ReceiveEvents event, Timestamp now) {
-    PEDRONET_TRACE("invoke timer ch");
-    std::unique_lock<std::mutex> lock(mu_);
-    next_expire_ = Timestamp::Max();
-
-    selectExpiredTimer(Timestamp::Now());
-    lock.unlock();
-    processExpireTimer();
-    lock.lock();
-    processPendingTimer(Timestamp::Now());
-    lock.unlock();
-  });
-}
+TimerQueue::TimerQueue(TimerChannel* channel) : channel_(channel) {}
 
 uint64_t TimerQueue::createTimer(Callback cb, const Duration& delay,
                                  const Duration& interval) {
@@ -85,21 +75,36 @@ uint64_t TimerQueue::createTimer(Callback cb, const Duration& delay,
   schedule_timer_.emplace(now + delay, timer);
   timers_.emplace(id, std::move(timer));
 
-  executor_.Schedule([this, now] { updateExpire(now); });
+  updateExpire(now);
   return id;
 }
+
 uint64_t TimerQueue::ScheduleEvery(const Duration& delay,
                                    const Duration& interval,
                                    Callback callback) {
   std::unique_lock<std::mutex> lock(mu_);
   return createTimer(std::move(callback), delay, interval);
 }
+
 uint64_t TimerQueue::ScheduleAfter(const Duration& delay, Callback callback) {
   std::unique_lock<std::mutex> lock(mu_);
   return createTimer(std::move(callback), delay, Duration::Seconds(0));
 }
+
 void TimerQueue::Cancel(uint64_t timer_id) {
   std::unique_lock<std::mutex> lock(mu_);
   timers_.erase(timer_id);
+}
+
+void TimerQueue::Process() {
+  std::unique_lock<std::mutex> lock(mu_);
+  next_expire_ = Timestamp::Max();
+
+  selectExpiredTimer(Timestamp::Now());
+  lock.unlock();
+  processExpireTimer();
+  lock.lock();
+  processPendingTimer(Timestamp::Now());
+  lock.unlock();
 }
 }  // namespace pedronet

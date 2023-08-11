@@ -1,5 +1,5 @@
-#ifndef PEDRONET_TIMER_QUEUE
-#define PEDRONET_TIMER_QUEUE
+#ifndef PEDRONET_QUEUE_TIMER_QUEUE
+#define PEDRONET_QUEUE_TIMER_QUEUE
 
 #include <mutex>
 #include <queue>
@@ -31,7 +31,7 @@ struct TimerOrder {
 
 class TimerQueue {
 
-  TimerChannel& channel_;
+  TimerChannel* channel_;
   Timestamp next_expire_ = Timestamp::Max();
   std::priority_queue<TimerOrder> schedule_timer_;
   std::queue<std::weak_ptr<TimerStruct>> expired_timers_;
@@ -40,7 +40,6 @@ class TimerQueue {
   std::mutex mu_;
   uint64_t sequences_{};
   std::unordered_map<uint64_t, std::shared_ptr<TimerStruct>> timers_;
-  Executor& executor_;
 
   void updateExpire(Timestamp now);
 
@@ -54,14 +53,16 @@ class TimerQueue {
   void processPendingTimer(Timestamp now);
 
  public:
-  TimerQueue(TimerChannel& channel, Executor& executor);
+  explicit TimerQueue(TimerChannel* channel);
 
-  ~TimerQueue() { channel_.SetEventCallBack({}); }
+  ~TimerQueue() { channel_->SetEventCallBack({}); }
 
   uint64_t ScheduleAfter(const Duration& delay, Callback callback);
 
   uint64_t ScheduleEvery(const Duration& delay, const Duration& interval,
                          Callback callback);
+  
+  void Process();
 
   void Cancel(uint64_t timer_id);
 };

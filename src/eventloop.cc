@@ -23,12 +23,6 @@ void EventLoop::Loop() {
       ReceiveEvents event = selected.events[i];
       ch->HandleEvents(event, selected.now);
     }
-
-    Callback callback;
-    while (callbacks_.try_dequeue(callback)) {
-      size_--;
-      callback();
-    }
   }
 
   current.UnbindEventLoop(this);
@@ -43,15 +37,7 @@ void EventLoop::Close() {
 }
 
 void EventLoop::Schedule(Callback cb) {
-  PEDRONET_TRACE("submit task");
-
-  while (!callbacks_.enqueue(std::move(cb))) {  // NOLINT: no move if failed.
-    std::this_thread::yield();
-  }
-
-  if (size_++ == 0) {
-    event_channel_.WakeUp();
-  }
+  event_queue_.Add(std::move(cb));
 }
 
 void EventLoop::AssertUnderLoop() const {
@@ -101,9 +87,14 @@ void EventLoop::Deregister(Channel* channel) {
 }
 
 EventLoop::EventLoop(std::unique_ptr<Selector> selector)
-    : selector_(std::move(selector)), timer_queue_(timer_channel_, *this) {
+    : selector_(std::move(selector)),
+      event_queue_(&event_channel_),
+      timer_queue_(&timer_channel_) {
   selector_->Add(&event_channel_, SelectEvents::kReadEvent);
   selector_->Add(&timer_channel_, SelectEvents::kReadEvent);
+
+  event_channel_.SetEventCallBack([this] { event_queue_.Process(); });
+  timer_channel_.SetEventCallBack([this] { timer_queue_.Process(); });
 
   PEDRONET_TRACE("create event loop");
 }
