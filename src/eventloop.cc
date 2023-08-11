@@ -4,15 +4,9 @@
 namespace pedronet {
 
 void EventLoop::ProcessScheduleTask() {
-  std::unique_lock<std::mutex> lock(mu_);
-  std::swap(running_tasks_, pending_tasks_);
-  lock.unlock();
-
-  while (!running_tasks_.empty()) {
-    auto task = std::move(running_tasks_.front());
-    running_tasks_.pop();
-
-    task();
+  Callback callback;
+  while (callbacks_.try_dequeue(callback)) {
+    callback();
   }
 }
 
@@ -51,13 +45,12 @@ void EventLoop::Close() {
 
 void EventLoop::Schedule(Callback cb) {
   PEDRONET_TRACE("submit task");
-  std::unique_lock<std::mutex> lock(mu_);
-  pending_tasks_.emplace(std::move(cb));
-  size_t n = pending_tasks_.size();
 
-  if (n == 1) {
-    event_channel_.WakeUp();
+  while (!callbacks_.enqueue(cb)) {
+    std::this_thread::yield();
   }
+
+  event_channel_.WakeUp();
 }
 
 void EventLoop::AssertUnderLoop() const {

@@ -10,8 +10,8 @@
 #include "pedronet/event.h"
 #include "pedronet/selector/selector.h"
 #include "pedronet/timer_queue.h"
-
 #include <pedrolib/concurrent/latch.h>
+#include <concurrentqueue.h>
 #include <atomic>
 
 namespace pedronet {
@@ -24,9 +24,7 @@ class EventLoop : public Executor {
   TimerChannel timer_channel_;
   TimerQueue timer_queue_;
 
-  std::mutex mu_;
-  std::queue<Callback> pending_tasks_;
-  std::queue<Callback> running_tasks_;
+  moodycamel::ConcurrentQueue<Callback> callbacks_;
 
   std::atomic_int32_t state_{1};
   std::unordered_map<Channel*, Callback> channels_;
