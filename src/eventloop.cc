@@ -3,18 +3,6 @@
 
 namespace pedronet {
 
-void EventLoop::ProcessScheduleTask() {
-  Callback callback;
-  while (callbacks_.try_dequeue(callback)) {
-    size_--;
-    callback();
-  }
-
-  if (size_ != 0) {
-    event_channel_.WakeUp();
-  }
-}
-
 void EventLoop::Loop() {
   PEDRONET_TRACE("EventLoop::Loop() running");
 
@@ -34,6 +22,12 @@ void EventLoop::Loop() {
       Channel* ch = selected.channels[i];
       ReceiveEvents event = selected.events[i];
       ch->HandleEvents(event, selected.now);
+    }
+
+    Callback callback;
+    while (callbacks_.try_dequeue(callback)) {
+      size_--;
+      callback();
     }
   }
 
@@ -108,7 +102,6 @@ void EventLoop::Deregister(Channel* channel) {
 
 EventLoop::EventLoop(std::unique_ptr<Selector> selector)
     : selector_(std::move(selector)), timer_queue_(timer_channel_, *this) {
-  event_channel_.SetEventCallBack([this]() { ProcessScheduleTask(); });
   selector_->Add(&event_channel_, SelectEvents::kReadEvent);
   selector_->Add(&timer_channel_, SelectEvents::kReadEvent);
 

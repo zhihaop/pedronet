@@ -35,8 +35,6 @@ class EventLoop : public Executor {
   std::unordered_map<Channel*, Callback> channels_;
 
   pedrolib::Latch close_latch_{1};
-  
-  void ProcessScheduleTask();
 
  public:
   explicit EventLoop(std::unique_ptr<Selector> selector);

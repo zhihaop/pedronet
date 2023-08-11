@@ -4,6 +4,7 @@
 #include <pedronet/selector/epoller.h>
 #include <pedronet/logger/logger.h>
 #include <future>
+#include <vector>
 
 using pedrolib::Latch;
 using pedrolib::Logger;
@@ -18,11 +19,15 @@ int main() {
   pedronet::logger::SetLevel(Logger::Level::kWarn);
   auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
 
+  std::vector<std::future<void>> defers;
+
   int n = 1e7 + 5;
+  int m = 16;
   std::atomic<int> counter = 0;
 
   Latch latch(1);
   logger.Info("bench start");
+  
   for (int i = 0; i < n; ++i) {
     executor.Schedule([&] {
       counter++;
