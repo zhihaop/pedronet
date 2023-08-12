@@ -15,7 +15,7 @@
 #include "pedronet/queue/event_double_buffer_queue.h"
 #include "pedronet/queue/event_lock_free_queue.h"
 #include "pedronet/queue/event_queue.h"
-#include "pedronet/queue/timer_queue.h"
+#include "pedronet/queue/timer_heap_queue.h"
 #include "pedronet/selector/selector.h"
 
 namespace pedronet {
@@ -31,7 +31,7 @@ class EventLoop : public Executor {
   EventChannel event_channel_;
   TimerChannel timer_channel_;
   EventLockFreeQueue event_queue_;
-  TimerQueue timer_queue_;
+  TimerHeapQueue timer_queue_;
 
   std::atomic_int32_t state_{kLooping};
   std::unordered_map<Channel*, Callback> channels_;
@@ -59,12 +59,12 @@ class EventLoop : public Executor {
   void Schedule(Callback cb) override;
 
   uint64_t ScheduleAfter(Duration delay, Callback cb) override {
-    return timer_queue_.ScheduleAfter(delay, std::move(cb));
+    return timer_queue_.Add(delay, Duration::Zero(), std::move(cb));
   }
 
   uint64_t ScheduleEvery(Duration delay, Duration interval,
                          Callback cb) override {
-    return timer_queue_.ScheduleEvery(delay, interval, std::move(cb));
+    return timer_queue_.Add(delay, interval, std::move(cb));
   }
 
   void ScheduleCancel(uint64_t id) override { timer_queue_.Cancel(id); }

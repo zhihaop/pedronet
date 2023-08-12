@@ -31,11 +31,11 @@ int main() {
   int j = 0;
   executor.ScheduleEvery(0ms, 1000ms, [&] {
     logger.Info("hello world timer 2[{}]", ++j);
-    if (j == 15) {
+    if (j == 5) {
       logger.Info("shutdown timer 1");
       executor.ScheduleCancel(id);
     }
-    if (j == 20) {
+    if (j == 10) {
       logger.Info("close");
       executor.Close();
     }

@@ -11,6 +11,7 @@ class TimerChannel final : public Channel {
   inline static const Duration kMinWakeUpDuration = Duration::Microseconds(100);
 
   Callback event_callback_;
+  std::atomic_uint64_t last_wakeup_us_{std::numeric_limits<uint64_t>::max()};
   File file_;
 
  public:
@@ -22,9 +23,10 @@ class TimerChannel final : public Channel {
   void HandleEvents(ReceiveEvents events, Timestamp now) override;
 
   File& GetFile() noexcept override { return file_; }
-  const File& GetFile() const noexcept override { return file_; }
+  
+  [[nodiscard]] const File& GetFile() const noexcept override { return file_; }
 
-  std::string String() const override;
+  [[nodiscard]] std::string String() const override;
 
   void WakeUpAt(Timestamp timestamp) {
     WakeUpAfter(timestamp - Timestamp::Now());
