@@ -15,7 +15,7 @@ inline static File CreateTimerFile() {
 TimerChannel::TimerChannel() : Channel(), file_(CreateTimerFile()) {}
 
 void TimerChannel::HandleEvents(ReceiveEvents, Timestamp) {
-  last_wakeup_us_ = std::numeric_limits<uint64_t>::max();
+  last_wakeup_us_ = std::numeric_limits<int64_t>::max();
 
   uint64_t val;
   if (file_.Read(&val, sizeof(val)) != sizeof(val)) {
@@ -34,7 +34,7 @@ void TimerChannel::WakeUpAfter(Duration duration) {
   int64_t usec = duration.Microseconds();
 
   for (;;) {
-    uint64_t us = last_wakeup_us_.load();
+    int64_t us = last_wakeup_us_.load();
     if (usec >= us) {
       return;
     }

@@ -9,6 +9,7 @@
 #include <pedrolib/file/error.h>
 #include <pedrolib/file/file.h>
 #include <pedrolib/timestamp.h>
+#include <pedrolib/concurrent/latch.h>
 
 namespace pedronet {
 
@@ -22,6 +23,7 @@ using pedrolib::File;
 using pedrolib::Logger;
 using pedrolib::RetrieveInt;
 using pedrolib::Timestamp;
+using pedrolib::Latch;
 
 }  // namespace pedronet
 

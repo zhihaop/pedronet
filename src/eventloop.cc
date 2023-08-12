@@ -8,6 +8,8 @@ void EventLoop::Loop() {
 
   auto& current = core::Thread::Current();
   current.BindEventLoop(this);
+  
+  timer_queue_.Init();
 
   SelectChannels selected;
   while (state_ & kLooping) {

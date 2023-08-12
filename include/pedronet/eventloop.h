@@ -15,10 +15,13 @@
 #include "pedronet/queue/event_double_buffer_queue.h"
 #include "pedronet/queue/event_lock_free_queue.h"
 #include "pedronet/queue/event_queue.h"
+#include "pedronet/queue/timer_hash_wheel.h"
 #include "pedronet/queue/timer_heap_queue.h"
 #include "pedronet/selector/selector.h"
 
 namespace pedronet {
+
+
 
 class EventLoop : public Executor {
   inline const static Duration kSelectTimeout{std::chrono::seconds(10)};
@@ -31,7 +34,7 @@ class EventLoop : public Executor {
   EventChannel event_channel_;
   TimerChannel timer_channel_;
   EventLockFreeQueue event_queue_;
-  TimerHeapQueue timer_queue_;
+  TimerHashWheel timer_queue_;
 
   std::atomic_int32_t state_{kLooping};
   std::unordered_map<Channel*, Callback> channels_;

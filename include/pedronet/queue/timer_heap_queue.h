@@ -41,17 +41,14 @@ class TimerHeapQueue final : public TimerQueue {
 
   void Cancel(uint64_t timer_id) override;
 
-  size_t Size() override;
-
  private:
   TimerChannel* channel_;
-  std::priority_queue<TimerOrder> schedule_timer_;
-  std::queue<std::weak_ptr<TimerStruct>> expired_timers_;
-  std::queue<std::weak_ptr<TimerStruct>> pending_timers_;
+  std::atomic_uint64_t counter_{};
+  std::queue<std::shared_ptr<const TimerStruct>> expires_;
 
   std::mutex mu_;
-  uint64_t sequences_{};
-  std::unordered_map<uint64_t, std::shared_ptr<TimerStruct>> timers_;
+  std::priority_queue<TimerOrder> queue_;
+  std::unordered_map<uint64_t, std::shared_ptr<const TimerStruct>> table_;
 };
 }  // namespace pedronet
 #endif  // PEDRONET_TIMER_QUEUE

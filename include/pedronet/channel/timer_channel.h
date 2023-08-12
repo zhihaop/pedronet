@@ -11,7 +11,7 @@ class TimerChannel final : public Channel {
   inline static const Duration kMinWakeUpDuration = Duration::Microseconds(100);
 
   Callback event_callback_;
-  std::atomic_uint64_t last_wakeup_us_{std::numeric_limits<uint64_t>::max()};
+  std::atomic_int64_t last_wakeup_us_{std::numeric_limits<int64_t>::max()};
   File file_;
 
  public:
