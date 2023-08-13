@@ -41,10 +41,13 @@ void TimerHeapQueue::Process() {
     if (timer->interval > Duration::Zero()) {
       Timestamp expire = Timestamp::Now() + timer->interval;
       queue_.emplace(expire, timer);
-      channel_->WakeUpAfter(timer->interval);
     } else {
       table_.erase(timer->id);
     }
+  }
+
+  if (!queue_.empty()) {
+    channel_->WakeUpAt(queue_.top().expire);
   }
 }
 }  // namespace pedronet

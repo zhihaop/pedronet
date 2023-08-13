@@ -25,7 +25,7 @@ class EventDoubleBufferQueue final : public EventQueue {
 
   void Process() override {
     std::unique_lock lock{mu_};
-    std::swap(pending_, running_);
+    running_.swap(pending_);
     lock.unlock();
 
     for (Callback& callback : running_) {

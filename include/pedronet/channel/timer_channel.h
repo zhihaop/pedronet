@@ -13,6 +13,7 @@ class TimerChannel final : public Channel {
   Callback event_callback_;
   std::atomic_int64_t last_wakeup_us_{std::numeric_limits<int64_t>::max()};
   File file_;
+  std::mutex mu_;
 
  public:
   TimerChannel();

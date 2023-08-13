@@ -16,10 +16,10 @@ TimerChannel::TimerChannel() : Channel(), file_(CreateTimerFile()) {}
 
 void TimerChannel::HandleEvents(ReceiveEvents, Timestamp) {
   last_wakeup_us_ = std::numeric_limits<int64_t>::max();
-
+  
   uint64_t val;
-  if (file_.Read(&val, sizeof(val)) != sizeof(val)) {
-    PEDRONET_FATAL("failed to read timer fd: {}", file_.GetError());
+  if (std::lock_guard guard{mu_}; file_.Read(&val, sizeof(val)) != sizeof(val)) {
+    PEDRONET_WARN("failed to read timer fd: {}", file_.GetError());
   }
   if (event_callback_) {
     event_callback_();
@@ -43,12 +43,13 @@ void TimerChannel::WakeUpAfter(Duration duration) {
       break;
     }
   }
-  
+
   v.it_value.tv_sec = usec / Duration::kMicroseconds;
   v.it_value.tv_nsec = (usec % Duration::kMicroseconds) * 1000;
 
+  std::lock_guard guard{mu_};
   if (::timerfd_settime(file_.Descriptor(), 0, &v, &u) < 0) {
-    PEDRONET_FATAL("failed to set timerfd time");
+    PEDRONET_WARN("failed to set timerfd time");
   }
 }
 

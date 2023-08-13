@@ -3,8 +3,8 @@
 
 #include <pedrolib/collection/simple_concurrent_hashmap.h>
 #include <pedrolib/collection/static_vector.h>
-#include <list>
-#include <utility>
+#include <map>
+
 #include "pedronet/channel/timer_channel.h"
 #include "pedronet/queue/timer_heap_queue.h"
 #include "pedronet/queue/timer_queue.h"
@@ -20,20 +20,30 @@ class TimerHashWheel : public TimerQueue {
     Callback callback;
   };
 
+  struct Timeout {
+    Timestamp expire;
+    std::weak_ptr<Entry> entry;
+
+    bool operator<(const Timeout& other) const noexcept {
+      return expire > other.expire;
+    }
+  };
+
   struct Bucket {
     std::mutex mu_;
-    std::vector<std::weak_ptr<Entry>> entry_;
+    std::priority_queue<Timeout> queue_;
 
     std::shared_ptr<Entry> Add(Entry entry) {
       std::lock_guard guard{mu_};
+      auto expired = entry.expired;
       auto ptr = std::make_shared<Entry>(std::move(entry));
-      entry_.emplace_back(ptr);
+      queue_.emplace(Timeout{expired, ptr});
       return ptr;
     }
 
     void Add(const std::shared_ptr<Entry>& entry) {
       std::lock_guard guard{mu_};
-      entry_.emplace_back(entry);
+      queue_.emplace(Timeout{entry->expired, entry});
     }
   };
 
@@ -41,20 +51,16 @@ class TimerHashWheel : public TimerQueue {
     size_t b = ticks % buckets_.size();
 
     std::unique_lock lock{buckets_[b].mu_};
-    auto& entry = buckets_[b].entry_;
-    for (auto it = entry.begin(); it != entry.end();) {
-      auto timer = it->lock();
+    auto& queue = buckets_[b].queue_;
+    
+    while (!queue.empty() && queue.top().expire <= now) {
+      auto timer = queue.top().entry.lock();
+      queue.pop();
+      
       if (timer == nullptr) {
-        it = entry.erase(it);
         continue;
       }
-
-      if (timer->expired > now) {
-        ++it;
-        continue;
-      }
-
-      it = entry.erase(it);
+      
       expired_.emplace(timer);
 
       if (timer->interval > Duration::Zero()) {
@@ -68,6 +74,12 @@ class TimerHashWheel : public TimerQueue {
 
   [[nodiscard]] uint64_t GetTicks(Timestamp ts) const {
     return ts.usecs / options_.tick_unit.usecs;
+  }
+
+  [[nodiscard]] Timestamp GetWakeUp(Timestamp expire) const {
+    expire.usecs =
+        expire.usecs / options_.tick_unit.usecs * options_.tick_unit.usecs;
+    return expire;
   }
 
  public:
@@ -84,6 +96,7 @@ class TimerHashWheel : public TimerQueue {
     for (int i = 0; i < options_.buckets; ++i) {
       buckets_.emplace_back();
     }
+    channel_->WakeUpAt(last_);
   }
 
   explicit TimerHashWheel(TimerChannel* channel)
@@ -107,7 +120,6 @@ class TimerHashWheel : public TimerQueue {
   uint64_t Add(Duration delay, Duration interval, Callback callback) override {
     uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
     table_.insert(id, Add(id, delay, interval, std::move(callback)));
-    channel_->WakeUpAfter(delay);
     return id;
   }
 
@@ -141,7 +153,7 @@ class TimerHashWheel : public TimerQueue {
       front->callback();
     }
 
-    channel_->WakeUpAt(now + options_.tick_unit);
+    channel_->WakeUpAt(GetWakeUp(now + options_.tick_unit));
   }
 
  private:

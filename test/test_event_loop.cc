@@ -2,6 +2,7 @@
 #include <pedronet/logger/logger.h>
 #include <pedronet/selector/epoller.h>
 
+#include <future>
 #include <iostream>
 
 using namespace std::chrono_literals;
@@ -18,7 +19,12 @@ int main() {
   logger.SetLevel(Logger::Level::kTrace);
 
   EventLoop executor;
-
+  auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
+  
+  executor.ScheduleAfter(1s, [&] {
+    logger.Info("start after 1s");
+  });
+  
   for (int i = 0; i < 5; ++i) {
     executor.Schedule([&, i] { logger.Info("schedule {}", i); });
   }
@@ -40,7 +46,5 @@ int main() {
       executor.Close();
     }
   });
-
-  executor.Loop();
   return 0;
 }
