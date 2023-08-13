@@ -38,13 +38,15 @@ class EventLoopGroup : public Executor {
 
   [[nodiscard]] size_t Size() const noexcept override;
 
-  template <typename Selector = EpollSelector>
   static EventLoopGroupPtr Create(size_t threads) {
+    return Create(threads, {});
+  }
+
+  static EventLoopGroupPtr Create(size_t threads, EventLoop::Options options) {
     auto group = std::make_shared<EventLoopGroup>(threads);
 
     for (size_t i = 0; i < threads; ++i) {
-      auto selector = std::make_unique<Selector>();
-      group->loops_.emplace_back(std::move(selector));
+      group->loops_.emplace_back(options);
     }
     for (size_t i = 0; i < threads; ++i) {
       auto& loop = group->loops_[i];

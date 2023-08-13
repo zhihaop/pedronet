@@ -17,7 +17,7 @@ int main() {
   Logger logger("test");
   logger.SetLevel(Logger::Level::kTrace);
 
-  EventLoop executor(std::make_unique<EpollSelector>());
+  EventLoop executor;
 
   for (int i = 0; i < 5; ++i) {
     executor.Schedule([&, i] { logger.Info("schedule {}", i); });

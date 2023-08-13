@@ -11,17 +11,11 @@
 #include "pedronet/channel/timer_channel.h"
 #include "pedronet/core/thread.h"
 #include "pedronet/event.h"
-#include "pedronet/queue/event_blocking_queue.h"
-#include "pedronet/queue/event_double_buffer_queue.h"
-#include "pedronet/queue/event_lock_free_queue.h"
-#include "pedronet/queue/event_queue.h"
-#include "pedronet/queue/timer_hash_wheel.h"
-#include "pedronet/queue/timer_heap_queue.h"
-#include "pedronet/selector/selector.h"
+#include "pedronet/queue/event_queue_factory.h"
+#include "pedronet/queue/timer_queue_factory.h"
+#include "pedronet/selector/selector_factory.h"
 
 namespace pedronet {
-
-
 
 class EventLoop : public Executor {
   inline const static Duration kSelectTimeout{std::chrono::seconds(10)};
@@ -30,19 +24,16 @@ class EventLoop : public Executor {
     kLooping = 1 << 0,
   };
 
-  std::unique_ptr<Selector> selector_;
-  EventChannel event_channel_;
-  TimerChannel timer_channel_;
-  EventLockFreeQueue event_queue_;
-  TimerHashWheel timer_queue_;
-
-  std::atomic_int32_t state_{kLooping};
-  std::unordered_map<Channel*, Callback> channels_;
-
-  pedrolib::Latch close_latch_{1};
-
  public:
-  explicit EventLoop(std::unique_ptr<Selector> selector);
+  struct Options {
+    EventQueueType event_queue_type{EventQueueType::kLockFreeQueue};
+    TimerQueueType timer_queue_type{TimerQueueType::kHeap};
+    SelectorType selector_type{SelectorType::kEpoll};
+  };
+
+  EventLoop();
+
+  explicit EventLoop(Options options);
 
   Selector* GetSelector() noexcept { return selector_.get(); }
 
@@ -62,15 +53,15 @@ class EventLoop : public Executor {
   void Schedule(Callback cb) override;
 
   uint64_t ScheduleAfter(Duration delay, Callback cb) override {
-    return timer_queue_.Add(delay, Duration::Zero(), std::move(cb));
+    return timer_queue_->Add(delay, Duration::Zero(), std::move(cb));
   }
 
   uint64_t ScheduleEvery(Duration delay, Duration interval,
                          Callback cb) override {
-    return timer_queue_.Add(delay, interval, std::move(cb));
+    return timer_queue_->Add(delay, interval, std::move(cb));
   }
 
-  void ScheduleCancel(uint64_t id) override { timer_queue_.Cancel(id); }
+  void ScheduleCancel(uint64_t id) override { timer_queue_->Cancel(id); }
 
   template <typename Runnable>
   void Run(Runnable&& runnable) {
@@ -91,6 +82,18 @@ class EventLoop : public Executor {
   ~EventLoop() override = default;
 
   void Join() override;
+
+ private:
+  EventChannel event_channel_;
+  TimerChannel timer_channel_;
+  std::unique_ptr<Selector> selector_;
+  std::unique_ptr<EventQueue> event_queue_;
+  std::unique_ptr<TimerQueue> timer_queue_;
+
+  std::atomic_int32_t state_{kLooping};
+  std::unordered_map<Channel*, Callback> channels_;
+
+  pedrolib::Latch close_latch_{1};
 };
 
 }  // namespace pedronet

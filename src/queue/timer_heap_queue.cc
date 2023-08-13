@@ -7,7 +7,7 @@ uint64_t TimerHeapQueue::Add(Duration delay, Duration interval,
                              Callback callback) {
   Timestamp expired = Timestamp::Now() + delay;
   uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
-  auto timer = std::make_shared<TimerStruct>(id, std::move(callback), interval);
+  auto timer = std::make_shared<Entry>(id, std::move(callback), interval);
 
   std::unique_lock<std::mutex> lock(mu_);
   queue_.emplace(expired, timer);

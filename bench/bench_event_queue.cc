@@ -10,15 +10,21 @@ using pedrolib::Latch;
 using pedrolib::Logger;
 using pedronet::EpollSelector;
 using pedronet::EventLoop;
+using pedronet::EventQueueType;
+using pedronet::TimerQueueType;
 
 int main() {
-  EventLoop executor(std::make_unique<EpollSelector>());
+  EventLoop::Options options{};
+  options.event_queue_type = EventQueueType::kDoubleBufferQueue;
+  options.timer_queue_type = TimerQueueType::kHeap;
+  options.selector_type = pedronet::SelectorType::kEpoll;
+  EventLoop executor(options);
 
   Logger logger("bench");
   logger.SetLevel(Logger::Level::kTrace);
   pedronet::logger::SetLevel(Logger::Level::kWarn);
   std::vector<std::future<void>> defers;
-  
+
   defers.emplace_back(std::async(std::launch::async, [&] { executor.Loop(); }));
 
   int n = 1000000;

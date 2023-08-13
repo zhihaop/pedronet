@@ -11,23 +11,23 @@ namespace pedronet {
 
 class TimerHeapQueue final : public TimerQueue {
 
-  struct TimerStruct : pedrolib::noncopyable, pedrolib::nonmovable {
+  struct Entry {
     uint64_t id;
     Callback callback;
     Duration interval;
 
-    TimerStruct(uint64_t id, Callback callback, const Duration& interval)
+    Entry(uint64_t id, Callback callback, const Duration& interval)
         : id(id), callback(std::move(callback)), interval(interval) {}
   };
 
-  struct TimerOrder {
+  struct Timeout {
     Timestamp expire;
-    mutable std::weak_ptr<TimerStruct> timer;
+    mutable std::weak_ptr<Entry> timer;
 
-    TimerOrder(Timestamp expire, const std::weak_ptr<TimerStruct>& timer)
+    Timeout(Timestamp expire, const std::weak_ptr<Entry>& timer)
         : expire(expire), timer(timer) {}
 
-    bool operator<(const TimerOrder& other) const noexcept {
+    bool operator<(const Timeout& other) const noexcept {
       return expire > other.expire;
     }
   };
@@ -44,11 +44,11 @@ class TimerHeapQueue final : public TimerQueue {
  private:
   TimerChannel* channel_;
   std::atomic_uint64_t counter_{};
-  std::queue<std::shared_ptr<const TimerStruct>> expires_;
+  std::queue<std::shared_ptr<const Entry>> expires_;
 
   std::mutex mu_;
-  std::priority_queue<TimerOrder> queue_;
-  std::unordered_map<uint64_t, std::shared_ptr<const TimerStruct>> table_;
+  std::priority_queue<Timeout> queue_;
+  std::unordered_map<uint64_t, std::shared_ptr<const Entry>> table_;
 };
 }  // namespace pedronet
 #endif  // PEDRONET_TIMER_QUEUE

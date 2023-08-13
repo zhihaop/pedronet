@@ -6,6 +6,7 @@
 
 namespace pedronet {
 struct TimerQueue {
+  virtual ~TimerQueue() = default;
   virtual uint64_t Add(Duration delay, Duration interval,
                        Callback callback) = 0;
   virtual void Cancel(uint64_t id) = 0;

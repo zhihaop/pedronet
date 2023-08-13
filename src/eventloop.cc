@@ -8,8 +8,6 @@ void EventLoop::Loop() {
 
   auto& current = core::Thread::Current();
   current.BindEventLoop(this);
-  
-  timer_queue_.Init();
 
   SelectChannels selected;
   while (state_ & kLooping) {
@@ -39,7 +37,7 @@ void EventLoop::Close() {
 }
 
 void EventLoop::Schedule(Callback cb) {
-  event_queue_.Add(std::move(cb));
+  event_queue_->Add(std::move(cb));
 }
 
 void EventLoop::AssertUnderLoop() const {
@@ -88,15 +86,15 @@ void EventLoop::Deregister(Channel* channel) {
   }
 }
 
-EventLoop::EventLoop(std::unique_ptr<Selector> selector)
-    : selector_(std::move(selector)),
-      event_queue_(&event_channel_),
-      timer_queue_(&timer_channel_) {
+EventLoop::EventLoop(EventLoop::Options options)
+    : selector_(MakeSelector(options.selector_type)),
+      event_queue_(MakeEventQueue(options.event_queue_type, &event_channel_)),
+      timer_queue_(MakeTimerQueue(options.timer_queue_type, &timer_channel_)) {
   selector_->Add(&event_channel_, SelectEvents::kReadEvent);
   selector_->Add(&timer_channel_, SelectEvents::kReadEvent);
 
-  event_channel_.SetEventCallBack([this] { event_queue_.Process(); });
-  timer_channel_.SetEventCallBack([this] { timer_queue_.Process(); });
+  event_channel_.SetEventCallBack([this] { event_queue_->Process(); });
+  timer_channel_.SetEventCallBack([this] { timer_queue_->Process(); });
 
   PEDRONET_TRACE("create event loop");
 }
@@ -110,5 +108,7 @@ void EventLoop::Join() {
 size_t EventLoop::Size() const noexcept {
   return 1;
 }
+
+EventLoop::EventLoop() : EventLoop(Options{}) {}
 
 }  // namespace pedronet

@@ -19,8 +19,8 @@ class EventBlockingQueue final : public EventQueue {
       return false;
     }
 
-    callback = std::move(queue_.back());
-    queue_.pop_back();
+    callback = std::move(queue_.front());
+    queue_.pop_front();
     return true;
   }
 

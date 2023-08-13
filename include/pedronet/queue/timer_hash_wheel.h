@@ -14,7 +14,7 @@ namespace pedronet {
 class TimerHashWheel : public TimerQueue {
 
   struct Entry {
-    uint64_t rounds{};
+    Timestamp expired;
     uint64_t id{};
     Duration interval;
     Callback callback;
@@ -37,9 +37,8 @@ class TimerHashWheel : public TimerQueue {
     }
   };
 
-  void Process(uint64_t ticks) {
+  void Process(Timestamp now, uint64_t ticks) {
     size_t b = ticks % buckets_.size();
-    uint64_t rounds = ticks / buckets_.size();
 
     std::unique_lock lock{buckets_[b].mu_};
     auto& entry = buckets_[b].entry_;
@@ -50,7 +49,7 @@ class TimerHashWheel : public TimerQueue {
         continue;
       }
 
-      if (timer->rounds > rounds) {
+      if (timer->expired > now) {
         ++it;
         continue;
       }
@@ -59,9 +58,9 @@ class TimerHashWheel : public TimerQueue {
       expired_.emplace(timer);
 
       if (timer->interval > Duration::Zero()) {
-        Timestamp expire = Timestamp::Now() + timer->interval;
+        Timestamp expire = timer->expired + timer->interval;
         uint64_t expire_ticks = GetTicks(expire);
-        timer->rounds = expire_ticks / buckets_.size();
+        timer->expired = expire;
         buckets_[expire_ticks % buckets_.size()].Add(timer);
       }
     }
@@ -79,6 +78,7 @@ class TimerHashWheel : public TimerQueue {
 
   TimerHashWheel(TimerChannel* channel, Options options)
       : channel_(channel),
+        last_(Timestamp::Now()),
         buckets_(options.buckets),
         options_(std::move(options)) {
     for (int i = 0; i < options_.buckets; ++i) {
@@ -89,12 +89,6 @@ class TimerHashWheel : public TimerQueue {
   explicit TimerHashWheel(TimerChannel* channel)
       : TimerHashWheel(channel, Options{}) {}
 
-  void Init() {
-    Timestamp now = Timestamp::Now();
-    last_ticks_ = GetTicks(now);
-    channel_->WakeUpAfter(options_.tick_unit);
-  }
-
   std::shared_ptr<Entry> Add(uint64_t id, Duration delay, Duration interval,
                              Callback callback) {
     Timestamp expired = Timestamp::Now() + delay;
@@ -103,7 +97,7 @@ class TimerHashWheel : public TimerQueue {
 
     Entry entry;
     entry.id = id;
-    entry.rounds = ticks / buckets_.size();
+    entry.expired = expired;
     entry.interval = interval;
     entry.callback = std::move(callback);
 
@@ -113,6 +107,7 @@ class TimerHashWheel : public TimerQueue {
   uint64_t Add(Duration delay, Duration interval, Callback callback) override {
     uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
     table_.insert(id, Add(id, delay, interval, std::move(callback)));
+    channel_->WakeUpAfter(delay);
     return id;
   }
 
@@ -123,10 +118,12 @@ class TimerHashWheel : public TimerQueue {
 
   void Process() override {
     Timestamp now = Timestamp::Now();
+    uint64_t last_ticks = GetTicks(last_);
     uint64_t next_ticks = GetTicks(now) + 1;
+    last_ = now;
 
-    while (last_ticks_ != next_ticks) {
-      Process(last_ticks_++);
+    while (last_ticks != next_ticks) {
+      Process(now, last_ticks++);
     }
 
     while (!expired_.empty()) {
@@ -150,7 +147,7 @@ class TimerHashWheel : public TimerQueue {
  private:
   TimerChannel* channel_;
 
-  uint64_t last_ticks_{};
+  Timestamp last_;
   std::atomic_uint64_t counter_{};
 
   pedrolib::StaticVector<Bucket> buckets_;

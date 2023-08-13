@@ -6,6 +6,7 @@
 namespace pedronet {
 
 struct EventQueue {
+  virtual ~EventQueue() = default;
   virtual void Add(Callback callback) = 0;
   virtual void Process() = 0;
   virtual size_t Size() = 0;
