@@ -1,7 +1,6 @@
 #ifndef PEDRONET_TIMER_HASH_WHEEL_H
 #define PEDRONET_TIMER_HASH_WHEEL_H
 
-#include <pedrolib/collection/simple_concurrent_hashmap.h>
 #include <pedrolib/collection/static_vector.h>
 #include <map>
 
@@ -47,20 +46,18 @@ class TimerHashWheel : public TimerQueue {
     }
   };
 
-  void Process(Timestamp now, uint64_t ticks) {
-    size_t b = ticks % buckets_.size();
+  void Process(Timestamp now, Bucket& bucket) {
+    std::unique_lock lock{bucket.mu_};
+    auto& queue = bucket.queue_;
 
-    std::unique_lock lock{buckets_[b].mu_};
-    auto& queue = buckets_[b].queue_;
-    
     while (!queue.empty() && queue.top().expire <= now) {
       auto timer = queue.top().entry.lock();
       queue.pop();
-      
+
       if (timer == nullptr) {
         continue;
       }
-      
+
       expired_.emplace(timer);
 
       if (timer->interval > Duration::Zero()) {
@@ -84,8 +81,8 @@ class TimerHashWheel : public TimerQueue {
 
  public:
   struct Options {
-    Duration tick_unit = Duration::Milliseconds(20);
-    size_t buckets = 1 << 10;
+    Duration tick_unit = Duration::Milliseconds(50);
+    size_t buckets = 1 << 16;
   };
 
   TimerHashWheel(TimerChannel* channel, Options options)
@@ -102,8 +99,8 @@ class TimerHashWheel : public TimerQueue {
   explicit TimerHashWheel(TimerChannel* channel)
       : TimerHashWheel(channel, Options{}) {}
 
-  std::shared_ptr<Entry> Add(uint64_t id, Duration delay, Duration interval,
-                             Callback callback) {
+  std::shared_ptr<Entry> Add(uint64_t id, const Duration& delay,
+                             const Duration& interval, Callback callback) {
     Timestamp expired = Timestamp::Now() + delay;
     uint64_t ticks = GetTicks(expired);
     size_t b = ticks % buckets_.size();
@@ -118,14 +115,15 @@ class TimerHashWheel : public TimerQueue {
   }
 
   uint64_t Add(Duration delay, Duration interval, Callback callback) override {
+    std::lock_guard guard{mu_};
     uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
-    table_.insert(id, Add(id, delay, interval, std::move(callback)));
+    table_[id] = Add(id, delay, interval, std::move(callback));
     return id;
   }
 
   void Cancel(uint64_t id) override {
-    std::shared_ptr<Entry> entry;
-    table_.erase(id, entry);
+    std::lock_guard guard{mu_};
+    table_.erase(id);
   }
 
   void Process() override {
@@ -134,8 +132,14 @@ class TimerHashWheel : public TimerQueue {
     uint64_t next_ticks = GetTicks(now) + 1;
     last_ = now;
 
-    while (last_ticks != next_ticks) {
-      Process(now, last_ticks++);
+    if (next_ticks - last_ticks < buckets_.size()) {
+      for (size_t i = last_ticks; i != next_ticks; ++i) {
+        Process(now, buckets_[i % buckets_.size()]);
+      }
+    } else {
+      for (auto& bucket : buckets_) {
+        Process(now, bucket);
+      }
     }
 
     while (!expired_.empty()) {
@@ -166,7 +170,8 @@ class TimerHashWheel : public TimerQueue {
   std::queue<std::weak_ptr<Entry>> expired_;
   Options options_;
 
-  pedrolib::SimpleConcurrentHashMap<uint64_t, std::shared_ptr<Entry>> table_;
+  std::mutex mu_;
+  std::unordered_map<uint64_t, std::shared_ptr<Entry>> table_;
 };
 }  // namespace pedronet
 

@@ -4,7 +4,6 @@
 #include <pedronet/logger/logger.h>
 #include <pedronet/selector/epoller.h>
 #include <future>
-#include <vector>
 
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include <nanobench.h>
@@ -32,6 +31,16 @@ void benchmark(const EventLoop::Options& options, const std::string& topic) {
   std::mt19937_64 rnd(time(nullptr));
   {
     Latch latch(n);
+    std::uniform_int_distribution<int> dist(500, 5000);
+    bench.run("RandomDelay(500, 5000)", [&] {
+      executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
+                             [&] { latch.CountDown(); });
+    });
+    latch.Await();
+  }
+  
+  {
+    Latch latch(n);
     std::uniform_int_distribution<int> dist(500, 2000);
     bench.run("RandomDelay(500, 2000)", [&] {
       executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
@@ -42,7 +51,7 @@ void benchmark(const EventLoop::Options& options, const std::string& topic) {
   
   {
     Latch latch(n);
-    std::uniform_int_distribution<int> dist(500, 5000);
+    std::uniform_int_distribution<int> dist(500, 1000);
     bench.run("RandomDelay(500, 5000)", [&] {
       executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
                              [&] { latch.CountDown(); });

@@ -3,7 +3,9 @@
 #include <pedronet/selector/epoller.h>
 #include <pedronet/tcp_client.h>
 #include "pedrolib/logger/logger.h"
-#include "reporter.h"
+
+#define ANKERL_NANOBENCH_IMPLEMENT
+#include <nanobench.h>
 
 using namespace std::chrono_literals;
 using pedrolib::Duration;
@@ -13,42 +15,95 @@ using pedronet::ArrayBuffer;
 using pedronet::EpollSelector;
 using pedronet::EventLoopGroup;
 using pedronet::InetAddress;
+using pedronet::Latch;
 using pedronet::TcpClient;
 using pedronet::TcpConnectionPtr;
+using pedronet::Timestamp;
 
-int main() {
-  pedronet::logger::SetLevel(Logger::Level::kInfo);
-  Logger logger("bench");
-  logger.SetLevel(Logger::Level::kTrace);
+struct Result {
+  std::string topic;
+  Timestamp start_ts;
+  Timestamp end_ts;
 
-  auto worker_group = EventLoopGroup::Create();
+  uint64_t msg_send{};
+  uint64_t byte_send{};
+};
 
-  Reporter reporter;
-  reporter.SetCallback([&](size_t bps, size_t ops, size_t, size_t max_bytes) {
-    double speed = 1.0 * static_cast<double>(bps) / (1 << 20);
-    logger.Info("client receive: {} MiB/s, {} packages/s, {} bytes/msg", speed,
-                ops, max_bytes);
-  });
-  reporter.Start(*worker_group, Duration::Seconds(1));
+Result benchmark(std::shared_ptr<EventLoopGroup> group, std::string_view topic,
+                 size_t length, size_t clients) {
 
-  auto buf = std::string(1 << 20, 'a');
+  auto buf = std::string(length, 'a');
 
-  size_t n_clients = 128;
-  StaticVector<TcpClient> clients(n_clients);
+  StaticVector<TcpClient> tcp_clients(clients);
   InetAddress address = InetAddress::Create("127.0.0.1", 1082);
-  for (size_t i = 0; i < n_clients; ++i) {
-    TcpClient& client = clients.emplace_back(address);
-    client.SetGroup(worker_group);
 
-    client.OnConnect([buf](const TcpConnectionPtr& conn) { conn->Send(buf); });
-    client.OnMessage(
-        [&](const TcpConnectionPtr& conn, ArrayBuffer& buffer, auto) {
-          reporter.Trace(buffer.ReadableBytes());
-          conn->Send(&buffer);
-        });
+  std::mutex mu;
+  Result result;
+  std::atomic_uint64_t msg_send{};
+  std::atomic_uint64_t byte_send{};
+
+  Latch latch(clients);
+  for (size_t i = 0; i < clients; ++i) {
+    TcpClient& client = tcp_clients.emplace_back(address);
+    client.SetGroup(group);
+
+    client.OnConnect([&](const TcpConnectionPtr& conn) {
+      std::lock_guard guard{mu};
+      result.start_ts = std::max(result.start_ts, Timestamp::Now());
+      conn->Send(buf);
+
+      conn->GetEventLoop().ScheduleAfter(5s, [conn] { conn->Shutdown(); });
+    });
+
+    client.OnClose([&](const TcpConnectionPtr& conn) { latch.CountDown(); });
+
+    client.OnMessage([&](const TcpConnectionPtr& conn, ArrayBuffer& buffer,
+                         Timestamp now) {
+      msg_send.fetch_add(1, std::memory_order_relaxed);
+      byte_send.fetch_add(buffer.ReadableBytes(), std::memory_order_relaxed);
+      conn->Send(&buffer);
+    });
     client.Start();
   }
 
-  worker_group->Join();
+  latch.Await();
+
+  result.topic = fmt::format("[{}] client:{}, package:{} KiB", topic, clients,
+                             length >> 10);
+  result.end_ts = Timestamp::Now();
+  result.byte_send = byte_send;
+  result.msg_send = msg_send;
+  return result;
+}
+
+void PrintResult(const Result& result) {
+  Duration duration = result.end_ts - result.start_ts;
+  uint64_t ms = duration.Milliseconds();
+  double avg_msg = 1000.0 * result.msg_send / ms;
+  double avg_byte = 1000.0 * result.byte_send / ms;
+  double avg_msg_byte = avg_byte / avg_msg;
+  fmt::print("[{}] {:.2f} msg/s, {:.2f} MiB/s, {:.2f} byte/msg\n", result.topic, avg_msg,
+             avg_byte / (1 << 20), avg_msg_byte);
+}
+
+int main() {
+  fmt::print("start benchmarking...\n");
+
+  auto group = EventLoopGroup::Create();
+
+  // 1 KiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    PrintResult(benchmark(group, "pedronet", 1 << 10, c));
+  }
+
+  // 32 KiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    PrintResult(benchmark(group, "pedronet", 32 << 10, c));
+  }
+
+  // 1 MiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    PrintResult(benchmark(group, "pedronet", 1 << 20, c));
+  }
   return 0;
 }
