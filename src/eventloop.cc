@@ -10,14 +10,20 @@ void EventLoop::Loop() {
   current.BindEventLoop(this);
 
   while (state_ & kLooping) {
-    const auto& selection = selector_->Wait(options_.select_timeout);
-    if (selection.err != Error::kOk) {
-      PEDRONET_ERROR("failed to call selector_.Wait(): {}", selection.err);
+    Error err = selector_->Wait(options_.select_timeout);
+    if (err != Error::kOk) {
+      PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
       continue;
     }
-    
-    for (const auto& [ch, ev] : selection.channels) {
-      ch->HandleEvents(ev, selection.now);
+
+    size_t n = selector_->Size();
+    Timestamp now = Timestamp::Now();
+    for (size_t i = 0; i < n; ++i) {
+      auto [ch, ev] = selector_->Get(i);
+      if (ch == nullptr) {
+        continue;
+      }
+      ch->HandleEvents(ev, now);
     }
   }
 

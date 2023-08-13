@@ -12,21 +12,25 @@ struct epoll_event;
 
 namespace pedronet {
 
-class EpollSelector : public File, public Selector {
-  std::vector<struct epoll_event> buf_;
-  Selection selection_;
+class EpollSelector : public Selector {
   void internalUpdate(Channel* channel, int op, SelectEvents events);
 
  public:
   EpollSelector();
   ~EpollSelector() override;
-  void SetBufferSize(size_t size);
 
   void Add(Channel* channel, SelectEvents events) override;
   void Remove(Channel* channel) override;
   void Update(Channel* channel, SelectEvents events) override;
 
-  const Selection& Wait(Duration timeout) override;
+  Error Wait(Duration timeout) override;
+  [[nodiscard]] size_t Size() const override;
+  [[nodiscard]] SelectChannel Get(size_t index) const override;
+
+ private:
+  File fd_;
+  size_t len_{};
+  std::vector<struct epoll_event> buf_;
 };
 }  // namespace pedronet
 

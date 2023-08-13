@@ -12,9 +12,7 @@ inline static File CreateEpollFile() {
   return File{fd};
 }
 
-EpollSelector::EpollSelector() : File(CreateEpollFile()), buf_(4096) {
-  selection_.channels.reserve(4096);
-}
+EpollSelector::EpollSelector() : fd_(CreateEpollFile()), buf_(256) {}
 
 EpollSelector::~EpollSelector() = default;
 
@@ -23,9 +21,9 @@ void EpollSelector::internalUpdate(Channel* channel, int op,
   struct epoll_event ev {};
   ev.events = events.Value();
   ev.data.ptr = channel;
-
-  int fd = channel->GetFile().Descriptor();
-  if (::epoll_ctl(fd_, op, fd, op == EPOLL_CTL_DEL ? nullptr : &ev) < 0) {
+  int efd = fd_.Descriptor();
+  int cfd = channel->GetFile().Descriptor();
+  if (::epoll_ctl(efd, op, cfd, op == EPOLL_CTL_DEL ? nullptr : &ev)) {
     PEDRONET_FATAL("epoll_ctl({}) failed, reason[{}]", *channel, Error{errno});
   }
 }
@@ -42,28 +40,21 @@ void EpollSelector::Remove(Channel* channel) {
   internalUpdate(channel, EPOLL_CTL_DEL, SelectEvents::kNoneEvent);
 }
 
-const Selection& EpollSelector::Wait(Duration timeout) {
-  int n = ::epoll_wait(fd_, buf_.data(), (int)buf_.size(),
+Error EpollSelector::Wait(Duration timeout) {
+  int efd = fd_.Descriptor();
+  int n = ::epoll_wait(efd, buf_.data(), (int)buf_.size(),
                        (int)timeout.Milliseconds());
 
-  selection_.channels.clear();
-  selection_.now = Timestamp::Now();
-  selection_.err = Error::Success();
-
-  if (n < 0) {
-    selection_.err = Error{errno};
-    return selection_;
-  }
-
-  for (int i = 0; i < n; ++i) {
-    selection_.channels.emplace_back((Channel*)buf_[i].data.ptr,
-                                     ReceiveEvents{buf_[i].events});
-  }
-  return selection_;
+  len_ = std::max(0, n);
+  return n < 0 ? Error{errno} : Error::Success();
 }
 
-void EpollSelector::SetBufferSize(size_t size) {
-  buf_.resize(size);
-  selection_.channels.reserve(size);
+size_t EpollSelector::Size() const {
+  return len_;
 }
+
+SelectChannel EpollSelector::Get(size_t index) const {
+  return {(Channel*)buf_[index].data.ptr, ReceiveEvents{buf_[index].events}};
+}
+
 }  // namespace pedronet

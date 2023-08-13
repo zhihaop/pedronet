@@ -31,7 +31,7 @@ int main() {
   });
   reporter.Start(*worker_group, Duration::Seconds(1));
 
-  auto buf = std::string(2 << 20, 'a');
+  auto buf = std::string(1 << 20, 'a');
 
   size_t n_clients = 128;
   StaticVector<TcpClient> clients(n_clients);
