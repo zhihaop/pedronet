@@ -14,6 +14,7 @@ namespace pedronet {
 
 class EpollSelector : public File, public Selector {
   std::vector<struct epoll_event> buf_;
+  Selection selection_;
   void internalUpdate(Channel* channel, int op, SelectEvents events);
 
  public:
@@ -25,7 +26,7 @@ class EpollSelector : public File, public Selector {
   void Remove(Channel* channel) override;
   void Update(Channel* channel, SelectEvents events) override;
 
-  Error Wait(Duration timeout, SelectChannels* selected) override;
+  const Selection& Wait(Duration timeout) override;
 };
 }  // namespace pedronet
 

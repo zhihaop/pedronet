@@ -12,7 +12,9 @@ inline static File CreateEpollFile() {
   return File{fd};
 }
 
-EpollSelector::EpollSelector() : File(CreateEpollFile()), buf_(4096) {}
+EpollSelector::EpollSelector() : File(CreateEpollFile()), buf_(4096) {
+  selection_.channels.reserve(4096);
+}
 
 EpollSelector::~EpollSelector() = default;
 
@@ -40,26 +42,28 @@ void EpollSelector::Remove(Channel* channel) {
   internalUpdate(channel, EPOLL_CTL_DEL, SelectEvents::kNoneEvent);
 }
 
-Error EpollSelector::Wait(Duration timeout, SelectChannels* selected) {
+const Selection& EpollSelector::Wait(Duration timeout) {
   int n = ::epoll_wait(fd_, buf_.data(), (int)buf_.size(),
                        (int)timeout.Milliseconds());
+
+  selection_.channels.clear();
+  selection_.now = Timestamp::Now();
+  selection_.err = Error::Success();
+
   if (n < 0) {
-    return Error{errno};
+    selection_.err = Error{errno};
+    return selection_;
   }
-
-  selected->now = Timestamp::Now();
-
-  selected->channels.resize(n);
-  selected->events.resize(n);
 
   for (int i = 0; i < n; ++i) {
-    selected->channels[i] = static_cast<Channel*>(buf_[i].data.ptr);
-    selected->events[i] = ReceiveEvents{buf_[i].events};
+    selection_.channels.emplace_back((Channel*)buf_[i].data.ptr,
+                                     ReceiveEvents{buf_[i].events});
   }
-  return Error::Success();
+  return selection_;
 }
 
 void EpollSelector::SetBufferSize(size_t size) {
   buf_.resize(size);
+  selection_.channels.reserve(size);
 }
 }  // namespace pedronet

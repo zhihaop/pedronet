@@ -9,19 +9,15 @@ void EventLoop::Loop() {
   auto& current = core::Thread::Current();
   current.BindEventLoop(this);
 
-  SelectChannels selected;
   while (state_ & kLooping) {
-    auto err = selector_->Wait(kSelectTimeout, &selected);
-    if (!err.Empty()) {
-      PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
+    const auto& selection = selector_->Wait(options_.select_timeout);
+    if (selection.err != Error::kOk) {
+      PEDRONET_ERROR("failed to call selector_.Wait(): {}", selection.err);
       continue;
     }
-
-    size_t n_events = selected.channels.size();
-    for (size_t i = 0; i < n_events; ++i) {
-      Channel* ch = selected.channels[i];
-      ReceiveEvents event = selected.events[i];
-      ch->HandleEvents(event, selected.now);
+    
+    for (const auto& [ch, ev] : selection.channels) {
+      ch->HandleEvents(ev, selection.now);
     }
   }
 
@@ -86,8 +82,9 @@ void EventLoop::Deregister(Channel* channel) {
   }
 }
 
-EventLoop::EventLoop(EventLoop::Options options)
-    : selector_(MakeSelector(options.selector_type)),
+EventLoop::EventLoop(const EventLoop::Options& options)
+    : options_(options),
+      selector_(MakeSelector(options.selector_type)),
       event_queue_(MakeEventQueue(options.event_queue_type, &event_channel_)),
       timer_queue_(MakeTimerQueue(options.timer_queue_type, &timer_channel_)) {
   selector_->Add(&event_channel_, SelectEvents::kReadEvent);

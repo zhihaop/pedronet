@@ -26,9 +26,8 @@ class EventLoopGroup : public Executor {
   explicit EventLoopGroup(size_t threads)
       : loops_(threads), threads_(threads), size_(threads), next_(0) {}
 
-  template <typename Selector = EpollSelector>
   static EventLoopGroupPtr Create() {
-    return Create<Selector>(std::thread::hardware_concurrency());
+    return Create(std::thread::hardware_concurrency());
   }
 
   template <typename... Executor>
@@ -42,7 +41,8 @@ class EventLoopGroup : public Executor {
     return Create(threads, {});
   }
 
-  static EventLoopGroupPtr Create(size_t threads, EventLoop::Options options) {
+  static EventLoopGroupPtr Create(size_t threads,
+                                  const EventLoop::Options& options) {
     auto group = std::make_shared<EventLoopGroup>(threads);
 
     for (size_t i = 0; i < threads; ++i) {

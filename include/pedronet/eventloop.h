@@ -18,8 +18,6 @@
 namespace pedronet {
 
 class EventLoop : public Executor {
-  inline const static Duration kSelectTimeout{std::chrono::seconds(10)};
-
   enum State {
     kLooping = 1 << 0,
   };
@@ -29,11 +27,12 @@ class EventLoop : public Executor {
     EventQueueType event_queue_type{EventQueueType::kLockFreeQueue};
     TimerQueueType timer_queue_type{TimerQueueType::kHeap};
     SelectorType selector_type{SelectorType::kEpoll};
+    Duration select_timeout{Duration::Seconds(10)};
   };
 
   EventLoop();
 
-  explicit EventLoop(Options options);
+  explicit EventLoop(const Options& options);
 
   Selector* GetSelector() noexcept { return selector_.get(); }
 
@@ -84,6 +83,7 @@ class EventLoop : public Executor {
   void Join() override;
 
  private:
+  Options options_;
   EventChannel event_channel_;
   TimerChannel timer_channel_;
   std::unique_ptr<Selector> selector_;
@@ -93,7 +93,7 @@ class EventLoop : public Executor {
   std::atomic_int32_t state_{kLooping};
   std::unordered_map<Channel*, Callback> channels_;
 
-  pedrolib::Latch close_latch_{1};
+  Latch close_latch_{1};
 };
 
 }  // namespace pedronet

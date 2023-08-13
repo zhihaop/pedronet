@@ -15,7 +15,7 @@ using pedronet::TimerQueueType;
 
 int main() {
   EventLoop::Options options{};
-  options.event_queue_type = EventQueueType::kDoubleBufferQueue;
+  options.event_queue_type = EventQueueType::kLockFreeQueue;
   options.timer_queue_type = TimerQueueType::kHeap;
   options.selector_type = pedronet::SelectorType::kEpoll;
   EventLoop executor(options);

@@ -14,18 +14,17 @@ namespace pedronet {
 
 struct Channel;
 
-struct SelectChannels {
+struct Selection {
   Timestamp now;
-  std::vector<Channel*> channels;
-  std::vector<ReceiveEvents> events;
+  Error err;
+  std::vector<std::pair<Channel*, ReceiveEvents>> channels;
 };
 
 struct Selector : pedrolib::noncopyable, pedrolib::nonmovable {
-
   virtual void Add(Channel* channel, SelectEvents events) = 0;
   virtual void Remove(Channel* channel) = 0;
   virtual void Update(Channel* channel, SelectEvents events) = 0;
-  virtual Error Wait(Duration timeout, SelectChannels* selected) = 0;
+  virtual const Selection& Wait(Duration timeout) = 0;
   virtual ~Selector() = default;
 };
 }  // namespace pedronet
