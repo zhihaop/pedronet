@@ -12,10 +12,25 @@
 namespace pedronet {
 
 class Poller : public Selector {
-  mutable bool cleanable_{};
+  using Locator = std::pair<size_t, Channel*>;
+
+  bool cleanable_{};
   size_t ready_{};
   std::vector<struct pollfd> buf_;
-  std::unordered_map<int, Channel*> channels_;
+  std::unordered_map<int, Locator> channels_;
+
+  void CleanUp() {
+    size_t head = 0;
+    for (auto& p : buf_) {
+      if (channels_.count(p.fd) == 0) {
+        continue;
+      }
+
+      buf_[head] = p;
+      channels_[p.fd].first = head++;
+    }
+    buf_.resize(head);
+  }
 
  public:
   Poller() = default;
@@ -27,39 +42,29 @@ class Poller : public Selector {
     pfd.fd = channel->GetFile().Descriptor();
     pfd.events = (short)events.Value();
     pfd.revents = 0;
-    channels_[pfd.fd] = channel;
+    channels_[pfd.fd] = {buf_.size() - 1, channel};
   }
 
   void Remove(Channel* channel) override {
     int fd = channel->GetFile().Descriptor();
-    if (channels_.count(fd) == 0) {
-      return;
-    }
-
-    auto it = std::find_if(buf_.begin(), buf_.end(),
-                           [fd](const struct pollfd& p) { return p.fd == fd; });
-    if (it != buf_.end()) {
-      it->fd = -1;
+    auto it = channels_.find(fd);
+    if (it != channels_.end()) {
+      channels_.erase(it);
       cleanable_ = true;
     }
   }
 
   void Update(Channel* channel, SelectEvents events) override {
     int fd = channel->GetFile().Descriptor();
-    auto it = std::find_if(buf_.begin(), buf_.end(),
-                           [fd](const struct pollfd& p) { return p.fd == fd; });
-    if (it != buf_.end()) {
-      it->events = (short)events.Value();
+    auto it = channels_.find(fd);
+    if (it != channels_.end()) {
+      buf_[it->second.first].events = (short)events.Value();
     }
   }
 
   Error Wait(Duration timeout) override {
     if (cleanable_) {
-      buf_.erase(std::remove_if(buf_.begin(), buf_.end(),
-                                [this](const struct pollfd& p) {
-                                  return channels_.count(p.fd) == 0;
-                                }),
-                 buf_.end());
+      CleanUp();
     }
     ready_ = 0;
 
@@ -77,15 +82,14 @@ class Poller : public Selector {
   }
 
   [[nodiscard]] size_t Size() const override { return ready_; }
-  
+
   [[nodiscard]] SelectChannel Get(size_t index) const override {
     auto& p = buf_[index];
     auto it = channels_.find(p.fd);
     if (it == channels_.end()) {
-      cleanable_ = true;
       return {nullptr, ReceiveEvents{0}};
     }
-    return {it->second, ReceiveEvents{(uint32_t)p.revents}};
+    return {it->second.second, ReceiveEvents{(uint32_t)p.revents}};
   }
 };
 }  // namespace pedronet
