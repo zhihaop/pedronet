@@ -58,7 +58,7 @@ void TcpConnection::handleRead(Timestamp now) {
 
 void TcpConnection::handleError(Error err) {
   if (err.Empty()) {
-    PEDRONET_ERROR("unknown error, force close");
+    // TODO(zhihaop) check why handle error
     handleClose();
     return;
   }

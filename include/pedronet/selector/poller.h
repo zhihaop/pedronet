@@ -15,8 +15,8 @@ class Poller : public Selector {
   using Locator = std::pair<size_t, Channel*>;
 
   bool cleanable_{};
-  size_t ready_{};
   std::vector<struct pollfd> buf_;
+  size_t ready_{};
   std::unordered_map<int, Locator> channels_;
 
   void CleanUp() {
@@ -62,10 +62,15 @@ class Poller : public Selector {
     }
   }
 
+  bool Contain(Channel* channel) const noexcept override {
+    return channels_.count(channel->GetFile().Descriptor());
+  }
+
   Error Wait(Duration timeout) override {
     if (cleanable_) {
       CleanUp();
     }
+
     ready_ = 0;
 
     int n = poll(buf_.data(), buf_.size(), (int)timeout.Milliseconds());
@@ -74,7 +79,6 @@ class Poller : public Selector {
     }
 
     ready_ = n;
-
     std::partition(buf_.begin(), buf_.end(),
                    [](const struct pollfd& p) { return p.revents != 0; });
 

@@ -23,6 +23,7 @@ struct Selector : pedrolib::noncopyable, pedrolib::nonmovable {
   virtual Error Wait(Duration timeout) = 0;
   [[nodiscard]] virtual size_t Size() const = 0;
   [[nodiscard]] virtual SelectChannel Get(size_t index) const = 0;
+  virtual bool Contain(Channel* channel) const noexcept = 0;
   virtual ~Selector() = default;
 };
 }  // namespace pedronet

@@ -6,6 +6,7 @@
 #include "pedronet/event.h"
 #include "pedronet/selector/selector.h"
 
+#include <unordered_set>
 #include <vector>
 
 struct epoll_event;
@@ -23,6 +24,8 @@ class EpollSelector : public Selector {
   void Remove(Channel* channel) override;
   void Update(Channel* channel, SelectEvents events) override;
 
+  bool Contain(Channel* channel) const noexcept override;
+
   Error Wait(Duration timeout) override;
   [[nodiscard]] size_t Size() const override;
   [[nodiscard]] SelectChannel Get(size_t index) const override;
@@ -31,6 +34,7 @@ class EpollSelector : public Selector {
   File fd_;
   size_t len_{};
   std::vector<struct epoll_event> buf_;
+  std::unordered_set<Channel*> channel_;
 };
 }  // namespace pedronet
 

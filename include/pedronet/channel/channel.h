@@ -23,6 +23,7 @@ struct Channel : pedrolib::noncopyable, pedrolib::nonmovable {
   [[nodiscard]] virtual const File& GetFile() const noexcept = 0;
   virtual void HandleEvents(ReceiveEvents events, Timestamp now) = 0;
   [[nodiscard]] virtual std::string String() const = 0;
+  [[nodiscard]] virtual int Priority() const noexcept = 0;
   virtual ~Channel() = default;
 };
 

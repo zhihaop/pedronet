@@ -20,11 +20,14 @@ class SocketChannel final : public Socket, public Channel {
   SelectorCallback write_callback_;
 
   Selector* selector_{};
+  int priority_{};
 
  public:
   explicit SocketChannel(Socket socket) : Socket(std::move(socket)) {}
 
   ~SocketChannel() override = default;
+
+  void SetPriority(int priority) { priority_ = priority; }
 
   void SetSelector(Selector* selector) { selector_ = selector; }
 
@@ -59,11 +62,14 @@ class SocketChannel final : public Socket, public Channel {
   void SetWritable(bool on);
 
   Socket& GetFile() noexcept final { return *this; }
+  
   [[nodiscard]] const Socket& GetFile() const noexcept final { return *this; }
 
   [[nodiscard]] std::string String() const override {
     return fmt::format("SocketChannel[fd={}]", fd_);
   }
+  
+  int Priority() const noexcept override;
 };
 
 }  // namespace pedronet

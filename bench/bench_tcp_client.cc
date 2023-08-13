@@ -29,13 +29,12 @@ struct Result {
   uint64_t byte_send{};
 };
 
-Result benchmark(std::shared_ptr<EventLoopGroup> group, std::string_view topic,
-                 size_t length, size_t clients) {
+Result benchmark(InetAddress address, std::shared_ptr<EventLoopGroup> group,
+                 std::string_view topic, size_t length, size_t clients) {
 
   auto buf = std::string(length, 'a');
 
   StaticVector<TcpClient> tcp_clients(clients);
-  InetAddress address = InetAddress::Create("127.0.0.1", 1082);
 
   std::mutex mu;
   Result result;
@@ -52,7 +51,7 @@ Result benchmark(std::shared_ptr<EventLoopGroup> group, std::string_view topic,
       result.start_ts = std::max(result.start_ts, Timestamp::Now());
       conn->Send(buf);
 
-      conn->GetEventLoop().ScheduleAfter(5s, [conn] { conn->Shutdown(); });
+      conn->GetEventLoop().ScheduleAfter(3s, [conn] { conn->Shutdown(); });
     });
 
     client.OnClose([&](const TcpConnectionPtr& conn) { latch.CountDown(); });
@@ -82,28 +81,40 @@ void PrintResult(const Result& result) {
   double avg_msg = 1000.0 * result.msg_send / ms;
   double avg_byte = 1000.0 * result.byte_send / ms;
   double avg_msg_byte = avg_byte / avg_msg;
-  fmt::print("[{}] {:.2f} msg/s, {:.2f} MiB/s, {:.2f} byte/msg\n", result.topic, avg_msg,
-             avg_byte / (1 << 20), avg_msg_byte);
+  fmt::print("[{}] {:.2f} msg/s, {:.2f} MiB/s, {:.2f} byte/msg\n", result.topic,
+             avg_msg, avg_byte / (1 << 20), avg_msg_byte);
 }
 
-int main() {
-  fmt::print("start benchmarking...\n");
-
-  auto group = EventLoopGroup::Create();
-
+void benchmark(InetAddress address, std::shared_ptr<EventLoopGroup> group,
+               const std::string& topic) {
+  // 32 B
+  for (size_t c = 1024; c <= 65536; c *= 2) {
+    PrintResult(benchmark(address, group, topic, 32, c));
+  }
+  
   // 1 KiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(group, "pedronet", 1 << 10, c));
+    PrintResult(benchmark(address, group, topic, 1 << 10, c));
   }
 
   // 32 KiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(group, "pedronet", 32 << 10, c));
+    PrintResult(benchmark(address, group, topic, 32 << 10, c));
   }
 
   // 1 MiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(group, "pedronet", 1 << 20, c));
+    PrintResult(benchmark(address, group, topic, 1 << 20, c));
   }
+}
+
+int main() {
+  pedronet::logger::SetLevel(Logger::Level::kError);
+  fmt::print("start benchmarking...\n");
+
+  auto group = EventLoopGroup::Create();
+  
+  benchmark(InetAddress::Create("127.0.0.1", 1082), group, "pedronet");
+  
   return 0;
 }

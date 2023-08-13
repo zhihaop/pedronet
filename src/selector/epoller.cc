@@ -18,6 +18,14 @@ EpollSelector::~EpollSelector() = default;
 
 void EpollSelector::internalUpdate(Channel* channel, int op,
                                    SelectEvents events) {
+  if (channel_.count(channel) == 0) {
+    return;
+  }
+  
+  if (op == EPOLL_CTL_DEL) {
+    channel_.erase(channel);
+  }
+  
   struct epoll_event ev {};
   ev.events = events.Value();
   ev.data.ptr = channel;
@@ -29,6 +37,7 @@ void EpollSelector::internalUpdate(Channel* channel, int op,
 }
 
 void EpollSelector::Add(Channel* channel, SelectEvents events) {
+  channel_.emplace(channel);
   internalUpdate(channel, EPOLL_CTL_ADD, events);
 }
 
@@ -55,6 +64,10 @@ size_t EpollSelector::Size() const {
 
 SelectChannel EpollSelector::Get(size_t index) const {
   return {(Channel*)buf_[index].data.ptr, ReceiveEvents{buf_[index].events}};
+}
+
+bool EpollSelector::Contain(Channel* channel) const noexcept {
+  return channel_.count(channel) != 0;
 }
 
 }  // namespace pedronet

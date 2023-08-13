@@ -12,11 +12,9 @@ class EventLockFreeQueue final : public EventQueue {
 
   std::atomic_size_t size_{};
   moodycamel::ConcurrentQueue<Callback> queue_;
-  std::vector<Callback> buf_;
 
  public:
-  explicit EventLockFreeQueue(EventChannel* channel)
-      : channel_(channel), buf_(32) {}
+  explicit EventLockFreeQueue(EventChannel* channel) : channel_(channel) {}
 
   void Add(Callback callback) override {
     while (
@@ -30,14 +28,15 @@ class EventLockFreeQueue final : public EventQueue {
   }
 
   void Process() override {
+    std::array<Callback, 32> buf;
     while (true) {
-      size_t s = queue_.try_dequeue_bulk(buf_.begin(), buf_.size());
-      if (s == 0) {
+      size_t n = queue_.try_dequeue_bulk(buf.begin(), buf.size());
+      if (n == 0) {
         break;
       }
-      size_.fetch_add(-s);
-      for (int i = 0; i < s; ++i) {
-        buf_[i]();
+      size_.fetch_add(-n);
+      for (int i = 0; i < n; ++i) {
+        buf[i]();
       }
     }
   }

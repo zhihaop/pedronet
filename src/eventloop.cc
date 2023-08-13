@@ -9,18 +9,35 @@ void EventLoop::Loop() {
   auto& current = core::Thread::Current();
   current.BindEventLoop(this);
 
+  std::vector<SelectChannel> ready;
+
   while (state_ & kLooping) {
     Error err = selector_->Wait(options_.select_timeout);
     if (err != Error::kOk) {
       PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
       continue;
     }
+    Timestamp now = Timestamp::Now();
 
     size_t n = selector_->Size();
-    Timestamp now = Timestamp::Now();
+    ready.clear();
+    ready.reserve(n);
+
     for (size_t i = 0; i < n; ++i) {
       auto [ch, ev] = selector_->Get(i);
-      if (ch == nullptr) {
+      if (!selector_->Contain(ch)) {
+        continue;
+      }
+      ready.emplace_back(ch, ev);
+    }
+
+    std::sort(ready.begin(), ready.end(),
+              [](const SelectChannel& x, const SelectChannel& y) {
+                return x.first->Priority() > y.first->Priority();
+              });
+
+    for (auto& [ch, ev] : ready) {
+      if (!selector_->Contain(ch)) {
         continue;
       }
       ch->HandleEvents(ev, now);
@@ -98,6 +115,8 @@ EventLoop::EventLoop(const EventLoop::Options& options)
 
   event_channel_.SetEventCallBack([this] { event_queue_->Process(); });
   timer_channel_.SetEventCallBack([this] { timer_queue_->Process(); });
+  event_channel_.SetPriority(-1);
+  timer_channel_.SetPriority(1);
 
   PEDRONET_TRACE("create event loop");
 }
