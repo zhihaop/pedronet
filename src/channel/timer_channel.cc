@@ -15,12 +15,13 @@ inline static File CreateTimerFile() {
 TimerChannel::TimerChannel() : Channel(), file_(CreateTimerFile()) {}
 
 void TimerChannel::HandleEvents(ReceiveEvents, Timestamp) {
-  last_wakeup_us_ = std::numeric_limits<int64_t>::max();
-
+  last_wakeup_us_ = std::numeric_limits<int64_t>::min();
   uint64_t val;
   if (file_.Read(&val, sizeof(val)) != sizeof(val)) {
     PEDRONET_WARN("failed to read timer fd: {}", file_.GetError());
   }
+  last_wakeup_us_ = std::numeric_limits<int64_t>::max();
+
   if (event_callback_) {
     event_callback_();
   }
@@ -35,7 +36,7 @@ void TimerChannel::WakeUpAfter(Duration duration) {
 
   for (;;) {
     int64_t us = last_wakeup_us_.load();
-    if (usec - 100 >= us) {
+    if (std::abs(usec - us) < 1000 || usec > us) {
       return;
     }
     if (last_wakeup_us_.compare_exchange_strong(us, usec)) {

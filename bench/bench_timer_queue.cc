@@ -13,16 +13,28 @@ using pedrolib::Logger;
 using pedronet::Duration;
 using pedronet::EpollSelector;
 using pedronet::EventLoop;
+using pedronet::EventLoopOptions;
 using pedronet::EventQueueType;
 using pedronet::TimerQueueType;
-using pedronet::EventLoopOptions;
 
-void benchmark(const EventLoopOptions& options, const std::string& topic) {
+template <typename Generator>
+void benchmark(const EventLoopOptions& options, const std::string& topic,
+               ankerl::nanobench::Bench& bench, Generator&& generator) {
   EventLoop executor(options);
   auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
 
-  const int n = 1000000;
-  
+  std::atomic_size_t counter = 0;
+  bench.run(topic, [&] {
+    executor.ScheduleAfter(Duration::Milliseconds(generator()),
+                           [&] { counter++; });
+  });
+  bench.doNotOptimizeAway(counter);
+  executor.Close();
+}
+
+void benchmark(const EventLoopOptions& options, const std::string& topic) {
+  const int n = 10000000;
+
   ankerl::nanobench::Bench bench;
   bench.epochs(1);
   bench.title(topic);
@@ -30,46 +42,24 @@ void benchmark(const EventLoopOptions& options, const std::string& topic) {
   bench.batch(1);
 
   std::mt19937_64 rnd(time(nullptr));
-  {
-    Latch latch(n);
-    std::uniform_int_distribution<int> dist(500, 5000);
-    bench.run("RandomDelay(500, 5000)", [&] {
-                             executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
-                             [&] { latch.CountDown(); });
-    });
-    latch.Await();
-  }
-  
-  {
-    Latch latch(n);
-    std::uniform_int_distribution<int> dist(500, 2000);
-    bench.run("RandomDelay(500, 2000)", [&] {
-      executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
-                             [&] { latch.CountDown(); });
-    });
-    latch.Await();
-  }
-  
-  {
-    Latch latch(n);
-    std::uniform_int_distribution<int> dist(500, 1000);
-bench.run("RandomDelay(500, 5000)", [&] {
-      executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
-                             [&] { latch.CountDown(); });
-    });
-    latch.Await();
-  }
+  benchmark(options, "RandomDelay(500, 500000)", bench, [&] {
+    thread_local std::uniform_int_distribution<int> dist(500, 50000);
+    return dist(rnd);
+  });
 
-  {
-    Latch latch(n);
-    bench.run("Delay(1000)", [&] {
-      executor.ScheduleAfter(Duration::Milliseconds(1000),
-                             [&] { latch.CountDown(); });
-    });
-    latch.Await();
-  }
-
-  executor.Close();
+  benchmark(options, "RandomDelay(500, 5000)", bench, [&] {
+    thread_local std::uniform_int_distribution<int> dist(500, 5000);
+    return dist(rnd);
+  });
+  
+  benchmark(options, "RandomDelay(500, 1000)", bench, [&] {
+    thread_local std::uniform_int_distribution<int> dist(500, 1000);
+    return dist(rnd);
+  });
+  
+  benchmark(options, "Delay(500)", bench, [&] {
+    return 500;
+  });
 }
 
 int main() {

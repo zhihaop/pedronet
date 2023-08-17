@@ -11,14 +11,17 @@ using pedrolib::Logger;
 using pedronet::EpollSelector;
 using pedronet::EventLoop;
 using pedronet::EventLoopGroup;
+using pedronet::EventLoopOptions;
 
 int main() {
   pedronet::logger::SetLevel(Logger::Level::kInfo);
 
   Logger logger("test");
   logger.SetLevel(Logger::Level::kTrace);
-
-  EventLoop executor;
+  
+  EventLoopOptions options;
+  options.timer_queue_type = pedronet::TimerQueueType::kHashWheel;
+  EventLoop executor(options);
   auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
   
   executor.ScheduleAfter(1s, [&] {

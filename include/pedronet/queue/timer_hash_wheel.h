@@ -2,6 +2,7 @@
 #define PEDRONET_TIMER_HASH_WHEEL_H
 
 #include <pedrolib/collection/static_vector.h>
+#include <list>
 #include <map>
 
 #include "pedronet/channel/timer_channel.h"
@@ -13,18 +14,18 @@ namespace pedronet {
 class TimerHashWheel : public TimerQueue {
 
   struct Entry {
-    Timestamp expired;
+    uint64_t rounds{};
     uint64_t id{};
     Duration interval;
     Callback callback;
   };
 
   struct Timeout {
-    Timestamp expire;
+    uint64_t rounds{};
     std::weak_ptr<Entry> entry;
 
     bool operator<(const Timeout& other) const noexcept {
-      return expire > other.expire;
+      return rounds > other.rounds;
     }
   };
 
@@ -34,43 +35,48 @@ class TimerHashWheel : public TimerQueue {
 
     std::shared_ptr<Entry> Add(Entry entry) {
       std::lock_guard guard{mu_};
-      auto expired = entry.expired;
+      auto rounds = entry.rounds;
       auto ptr = std::make_shared<Entry>(std::move(entry));
-      queue_.emplace(Timeout{expired, ptr});
+      queue_.emplace(Timeout{rounds, ptr});
       return ptr;
     }
 
     void Add(const std::shared_ptr<Entry>& entry) {
       std::lock_guard guard{mu_};
-      queue_.emplace(Timeout{entry->expired, entry});
+      queue_.emplace(Timeout{entry->rounds, entry});
+    }
+
+    bool Pop(uint64_t current_rounds, std::weak_ptr<Entry>& entry) {
+      std::unique_lock lock{mu_};
+
+      while (true) {
+        if (queue_.empty()) {
+          return false;
+        }
+
+        auto& top = queue_.top();
+        if (top.rounds > current_rounds) {
+          return false;
+        }
+
+        if (top.entry.expired()) {
+          queue_.pop();
+          continue;
+        }
+
+        entry = top.entry;
+        queue_.pop();
+        return true;
+      }
     }
   };
 
-  void Process(Timestamp now, Bucket& bucket) {
-    std::unique_lock lock{bucket.mu_};
-    auto& queue = bucket.queue_;
-
-    while (!queue.empty() && queue.top().expire <= now) {
-      auto timer = queue.top().entry.lock();
-      queue.pop();
-
-      if (timer == nullptr) {
-        continue;
-      }
-
-      expired_.emplace(timer);
-
-      if (timer->interval > Duration::Zero()) {
-        Timestamp expire = timer->expired + timer->interval;
-        uint64_t expire_ticks = GetTicks(expire);
-        timer->expired = expire;
-        buckets_[expire_ticks % buckets_.size()].Add(timer);
-      }
-    }
-  }
-
   [[nodiscard]] uint64_t GetTicks(Timestamp ts) const {
     return ts.usecs / options_.tick_unit.usecs;
+  }
+
+  [[nodiscard]] uint64_t GetRounds(Timestamp ts) const {
+    return ts.usecs / options_.tick_unit.usecs / options_.buckets;
   }
 
   [[nodiscard]] Timestamp GetWakeUp(Timestamp expire) const {
@@ -81,8 +87,8 @@ class TimerHashWheel : public TimerQueue {
 
  public:
   struct Options {
-    Duration tick_unit = Duration::Milliseconds(50);
-    size_t buckets = 1 << 16;
+    Duration tick_unit = Duration::Milliseconds(100);
+    size_t buckets = 600;
   };
 
   TimerHashWheel(TimerChannel* channel, Options options)
@@ -107,7 +113,7 @@ class TimerHashWheel : public TimerQueue {
 
     Entry entry;
     entry.id = id;
-    entry.expired = expired;
+    entry.rounds = GetRounds(expired);
     entry.interval = interval;
     entry.callback = std::move(callback);
 
@@ -130,33 +136,44 @@ class TimerHashWheel : public TimerQueue {
     Timestamp now = Timestamp::Now();
     uint64_t last_ticks = GetTicks(last_);
     uint64_t next_ticks = GetTicks(now) + 1;
+    uint64_t rounds = GetRounds(now);
     last_ = now;
+
+    auto ProcessExpired = [&](const std::weak_ptr<Entry>& entry) {
+      auto timer = entry.lock();
+      if (timer == nullptr) {
+        return;
+      }
+
+      if (timer->interval <= Duration::Zero()) {
+        Cancel(timer->id);
+      } else {
+        Timestamp expire = now + timer->interval;
+        uint64_t expire_ticks = GetTicks(expire);
+        timer->rounds = GetRounds(expire);
+        buckets_[expire_ticks % buckets_.size()].Add(timer);
+      }
+
+      timer->callback();
+    };
 
     if (next_ticks - last_ticks < buckets_.size()) {
       for (size_t i = last_ticks; i != next_ticks; ++i) {
-        Process(now, buckets_[i % buckets_.size()]);
+        auto& bucket = buckets_[i % buckets_.size()];
+        std::weak_ptr<Entry> entry;
+        while (bucket.Pop(rounds, entry)) {
+          ProcessExpired(entry);
+        }
       }
     } else {
       for (auto& bucket : buckets_) {
-        Process(now, bucket);
+        std::weak_ptr<Entry> entry;
+        while (bucket.Pop(rounds, entry)) {
+          ProcessExpired(entry);
+        }
       }
     }
-
-    while (!expired_.empty()) {
-      auto front = expired_.front().lock();
-      expired_.pop();
-
-      if (front == nullptr) {
-        continue;
-      }
-
-      if (front->interval <= Duration::Zero()) {
-        Cancel(front->id);
-      }
-
-      front->callback();
-    }
-
+    
     channel_->WakeUpAt(GetWakeUp(now + options_.tick_unit));
   }
 
@@ -167,7 +184,6 @@ class TimerHashWheel : public TimerQueue {
   std::atomic_uint64_t counter_{};
 
   pedrolib::StaticVector<Bucket> buckets_;
-  std::queue<std::weak_ptr<Entry>> expired_;
   Options options_;
 
   std::mutex mu_;
