@@ -1,16 +1,10 @@
 #ifndef PEDRONET_SOCKET_H
 #define PEDRONET_SOCKET_H
-#include "defines.h"
+
 #include "pedronet/inetaddress.h"
+#include "pedronet/options.h"
 
 namespace pedronet {
-
-struct Option {
-  bool reuse_addr = true;
-  bool reuse_port = true;
-  bool keep_alive = true;
-  bool tcp_no_delay = true;
-};
 
 class Socket : public File {
   explicit Socket(int fd) : File(fd) {}
@@ -26,6 +20,8 @@ class Socket : public File {
   Error Accept(const InetAddress& local, Socket* socket);
   void Listen();
   Error Connect(const InetAddress& address);
+
+  void SetOptions(const SocketOptions& options);
 
   void SetReuseAddr(bool on);
   void SetReusePort(bool on);

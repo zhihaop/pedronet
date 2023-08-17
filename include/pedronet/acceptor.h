@@ -1,6 +1,7 @@
 #ifndef PEDRONET_ACCEPTOR_H
 #define PEDRONET_ACCEPTOR_H
 #include "pedronet/channel/socket_channel.h"
+#include "pedronet/options.h"
 #include "pedronet/socket.h"
 
 #include <pedrolib/format/formatter.h>
@@ -22,7 +23,7 @@ class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
 
  public:
   Acceptor(EventLoop& eventloop, const InetAddress& address,
-           const Option& option);
+           const SocketOptions& option);
 
   ~Acceptor() { Close(); }
 

@@ -2,10 +2,9 @@
 #define PEDRONET_QUEUE_TIMER_QUEUE_FACTORY_H
 #include "pedronet/queue/timer_hash_wheel.h"
 #include "pedronet/queue/timer_heap_queue.h"
+#include "pedronet/options.h"
 
 namespace pedronet {
-
-enum class TimerQueueType { kHashWheel, kHeap };
 
 inline static std::unique_ptr<TimerQueue> MakeTimerQueue(TimerQueueType type,
                                            TimerChannel* channel) {

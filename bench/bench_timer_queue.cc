@@ -15,8 +15,9 @@ using pedronet::EpollSelector;
 using pedronet::EventLoop;
 using pedronet::EventQueueType;
 using pedronet::TimerQueueType;
+using pedronet::EventLoopOptions;
 
-void benchmark(const EventLoop::Options& options, const std::string& topic) {
+void benchmark(const EventLoopOptions& options, const std::string& topic) {
   EventLoop executor(options);
   auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
 
@@ -74,7 +75,7 @@ bench.run("RandomDelay(500, 5000)", [&] {
 int main() {
   pedronet::logger::SetLevel(Logger::Level::kTrace);
 
-  EventLoop::Options options{};
+  EventLoopOptions options{};
   options.event_queue_type = EventQueueType::kLockFreeQueue;
   options.timer_queue_type = TimerQueueType::kHeap;
   options.selector_type = pedronet::SelectorType::kEpoll;

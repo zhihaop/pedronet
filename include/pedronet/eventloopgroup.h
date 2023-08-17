@@ -42,7 +42,7 @@ class EventLoopGroup : public Executor {
   }
 
   static EventLoopGroupPtr Create(size_t threads,
-                                  const EventLoop::Options& options) {
+                                  const EventLoopOptions& options) {
     auto group = std::make_shared<EventLoopGroup>(threads);
 
     for (size_t i = 0; i < threads; ++i) {

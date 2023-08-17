@@ -132,8 +132,8 @@ int main() {
   auto group = EventLoopGroup::Create();
 
   benchmark(InetAddress::Create("127.0.0.1", 1082), group, "pedronet");
-  //  benchmark(InetAddress::Create("127.0.0.1", 1083), group, "asio");
-  //  benchmark(InetAddress::Create("127.0.0.1", 1084), group, "muduo");
-  //  benchmark(InetAddress::Create("127.0.0.1", 1085), group, "netty");
+  benchmark(InetAddress::Create("127.0.0.1", 1083), group, "asio");
+  benchmark(InetAddress::Create("127.0.0.1", 1084), group, "muduo");
+  benchmark(InetAddress::Create("127.0.0.1", 1085), group, "netty");
   return 0;
 }

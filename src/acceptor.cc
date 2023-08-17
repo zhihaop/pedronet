@@ -6,17 +6,14 @@
 namespace pedronet {
 
 Acceptor::Acceptor(EventLoop& eventloop, const InetAddress& address,
-                   const Option& option)
+                   const SocketOptions& options)
     : address_(address),
       channel_(Socket::Create(address.Family(), true)),
       eventloop_(eventloop) {
   PEDRONET_TRACE("Acceptor::Acceptor()");
 
   auto& socket = channel_.GetFile();
-  socket.SetReuseAddr(option.reuse_addr);
-  socket.SetReusePort(option.reuse_port);
-  socket.SetKeepAlive(option.keep_alive);
-  socket.SetTcpNoDelay(option.tcp_no_delay);
+  socket.SetOptions(options);
 
   channel_.SetSelector(eventloop.GetSelector());
 

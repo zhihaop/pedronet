@@ -60,6 +60,8 @@ class TcpConnection : pedrolib::noncopyable,
   void SetContext(const std::shared_ptr<ChannelContext>& ctx) { ctx_ = ctx; }
   const auto& GetContext() const noexcept { return ctx_; }
 
+  auto& GetSocket() noexcept { return channel_.GetFile(); }
+
   State GetState() const noexcept { return state_; }
 
   void Start();

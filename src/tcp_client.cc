@@ -10,7 +10,6 @@ void TcpClient::handleConnection(Socket socket) {
     PEDRONET_WARN("state_ != State::kConnection, connection closed");
     return;
   }
-
   connection_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
 
   connection_->OnClose([this](auto&& conn) {
@@ -43,10 +42,7 @@ void TcpClient::raiseConnection() {
   }
 
   Socket socket = Socket::Create(address_.Family(), true);
-  socket.SetKeepAlive(true);
-  socket.SetReuseAddr(true);
-  socket.SetReusePort(true);
-  socket.SetTcpNoDelay(true);
+  socket.SetOptions(options_.options);
 
   auto err = socket.Connect(address_);
   switch (err.GetCode()) {

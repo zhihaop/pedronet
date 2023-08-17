@@ -23,16 +23,7 @@ class EventLoop : public Executor {
   };
 
  public:
-  struct Options {
-    EventQueueType event_queue_type{EventQueueType::kLockFreeQueue};
-    TimerQueueType timer_queue_type{TimerQueueType::kHeap};
-    SelectorType selector_type{SelectorType::kEpoll};
-    Duration select_timeout{Duration::Seconds(10)};
-  };
-
-  EventLoop();
-
-  explicit EventLoop(const Options& options);
+  explicit EventLoop(const EventLoopOptions& options);
 
   Selector* GetSelector() noexcept { return selector_.get(); }
 
@@ -83,7 +74,7 @@ class EventLoop : public Executor {
   void Join() override;
 
  private:
-  Options options_;
+  EventLoopOptions options_;
   EventChannel event_channel_;
   TimerChannel timer_channel_;
   std::unique_ptr<Selector> selector_;

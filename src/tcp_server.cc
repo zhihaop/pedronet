@@ -8,6 +8,8 @@ void TcpServer::Start() {
 
   acceptor_->OnAccept([this](Socket socket) {
     PEDRONET_TRACE("TcpServer::OnAccept({})", socket);
+    socket.SetOptions(options_.child_options);
+    
     auto connection = std::make_shared<TcpConnection>(worker_group_->Next(),
                                                       std::move(socket));
 
@@ -63,7 +65,7 @@ void TcpServer::Bind(const pedronet::InetAddress& address) {
   }
 
   acceptor_ = std::make_shared<Acceptor>(boss_group_->Next(), address,
-                                         Option{});
+                                         options_.boss_options);
   acceptor_->Bind();
 }
 }  // namespace pedronet

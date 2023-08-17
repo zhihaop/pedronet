@@ -4,14 +4,9 @@
 #include "pedronet/queue/event_blocking_queue.h"
 #include "pedronet/queue/event_double_buffer_queue.h"
 #include "pedronet/queue/event_lock_free_queue.h"
+#include "pedronet/options.h"
 
 namespace pedronet {
-
-enum class EventQueueType {
-  kBlockingQueue,
-  kDoubleBufferQueue,
-  kLockFreeQueue,
-};
 
 inline static std::unique_ptr<EventQueue> MakeEventQueue(EventQueueType type,
                                           EventChannel* channel) {

@@ -4,10 +4,9 @@
 #include "pedronet/logger/logger.h"
 #include "pedronet/selector/epoller.h"
 #include "pedronet/selector/poller.h"
+#include "pedronet/options.h"
 
 namespace pedronet {
-
-enum class SelectorType { kEpoll, kPoll };
 
 inline static std::unique_ptr<Selector> MakeSelector(SelectorType type) {
   switch (type) {

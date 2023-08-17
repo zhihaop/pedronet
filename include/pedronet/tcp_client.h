@@ -38,6 +38,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   ErrorCallback error_callback_;
   WriteCompleteCallback write_complete_callback_;
   HighWatermarkCallback high_watermark_callback_;
+  TcpClientOptions options_{};
 
  private:
   void handleConnection(pedronet::Socket conn);
@@ -56,6 +57,8 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   void Shutdown();
   void ForceClose();
   void ForceShutdown();
+
+  void SetOptions(const TcpClientOptions& options) { options_ = options; }
 
   void OnConnect(ConnectionCallback callback) {
     connection_callback_ = std::move(callback);
@@ -76,7 +79,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   [[nodiscard]] TcpConnectionPtr GetConnection() const noexcept {
     return connection_;
   }
-  
+
   template <class Packable>
   bool Write(Packable&& packable) {
     if (state_ == State::kConnected) {

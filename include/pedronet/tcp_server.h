@@ -31,11 +31,17 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
 
   std::mutex mu_;
   std::unordered_set<std::shared_ptr<TcpConnection>> actives_;
+  
+  TcpServerOptions options_{};
 
  public:
   TcpServer() = default;
   ~TcpServer() { Close(); }
-
+  
+  void SetOptions(const TcpServerOptions& options) {
+    options_ = options;
+  }
+  
   void SetGroup(const std::shared_ptr<EventLoopGroup>& boss,
                 const std::shared_ptr<EventLoopGroup>& worker) {
     boss_group_ = boss;

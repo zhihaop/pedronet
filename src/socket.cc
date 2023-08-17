@@ -149,4 +149,11 @@ void Socket::Shutdown() {
   }
 }
 
+void Socket::SetOptions(const SocketOptions& options) {
+  SetKeepAlive(options.keep_alive);
+  SetReuseAddr(options.reuse_addr);
+  SetReusePort(options.reuse_port);
+  SetTcpNoDelay(options.tcp_no_delay);
+}
+
 }  // namespace pedronet

@@ -100,7 +100,7 @@ void EventLoop::Deregister(Channel* channel) {
   }
 }
 
-EventLoop::EventLoop(const EventLoop::Options& options)
+EventLoop::EventLoop(const EventLoopOptions& options)
     : options_(options),
       selector_(MakeSelector(options.selector_type)),
       event_queue_(MakeEventQueue(options.event_queue_type, &event_channel_)),
@@ -125,7 +125,5 @@ void EventLoop::Join() {
 size_t EventLoop::Size() const noexcept {
   return 1;
 }
-
-EventLoop::EventLoop() : EventLoop(Options{}) {}
 
 }  // namespace pedronet

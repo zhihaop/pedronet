@@ -15,6 +15,7 @@ using pedronet::EpollSelector;
 using pedronet::EventLoop;
 using pedronet::EventQueueType;
 using pedronet::TimerQueueType;
+using pedronet::EventLoopOptions;
 
 void benchmark(EventLoop& executor, const std::string& topic, size_t thread) {
   std::vector<std::future<void>> defers;
@@ -40,7 +41,7 @@ void benchmark(EventLoop& executor, const std::string& topic, size_t thread) {
   });
 }
 
-void benchmark(const EventLoop::Options& options, const std::string& topic) {
+void benchmark(const EventLoopOptions& options, const std::string& topic) {
   EventLoop executor(options);
   auto defer = std::async(std::launch::async, [&] { executor.Loop(); });
   for (size_t i = 1; i <= 16; i *= 2) {
@@ -52,7 +53,7 @@ void benchmark(const EventLoop::Options& options, const std::string& topic) {
 int main() {
   pedronet::logger::SetLevel(Logger::Level::kTrace);
 
-  EventLoop::Options options{};
+  EventLoopOptions options{};
   options.timer_queue_type = TimerQueueType::kHeap;
   options.selector_type = pedronet::SelectorType::kEpoll;
 
