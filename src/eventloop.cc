@@ -31,11 +31,6 @@ void EventLoop::Loop() {
       ready.emplace_back(ch, ev);
     }
 
-    std::sort(ready.begin(), ready.end(),
-              [](const SelectChannel& x, const SelectChannel& y) {
-                return x.first->Priority() > y.first->Priority();
-              });
-
     for (auto& [ch, ev] : ready) {
       if (!selector_->Contain(ch)) {
         continue;

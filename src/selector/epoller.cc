@@ -21,11 +21,11 @@ void EpollSelector::internalUpdate(Channel* channel, int op,
   if (channel_.count(channel) == 0) {
     return;
   }
-  
+
   if (op == EPOLL_CTL_DEL) {
     channel_.erase(channel);
   }
-  
+
   struct epoll_event ev {};
   ev.events = events.Value();
   ev.data.ptr = channel;
@@ -55,6 +55,10 @@ Error EpollSelector::Wait(Duration timeout) {
                        (int)timeout.Milliseconds());
 
   len_ = std::max(0, n);
+
+  if (len_ == buf_.size() && len_ < 65536) {
+    buf_.resize(buf_.size() << 1);
+  }
   return n < 0 ? Error{errno} : Error::Success();
 }
 

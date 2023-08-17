@@ -7,6 +7,8 @@
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include <nanobench.h>
 
+#include <future>
+
 using namespace std::chrono_literals;
 using pedrolib::Duration;
 using pedrolib::Logger;
@@ -30,7 +32,8 @@ struct Result {
 };
 
 Result benchmark(InetAddress address, std::shared_ptr<EventLoopGroup> group,
-                 std::string_view topic, size_t length, size_t clients) {
+                 std::string_view topic, size_t length, size_t clients,
+                 Duration delay) {
 
   auto buf = std::string(length, 'a');
 
@@ -60,7 +63,12 @@ Result benchmark(InetAddress address, std::shared_ptr<EventLoopGroup> group,
                          Timestamp now) {
       msg_send.fetch_add(1, std::memory_order_relaxed);
       byte_send.fetch_add(buffer.ReadableBytes(), std::memory_order_relaxed);
-      conn->Send(&buffer);
+      if (delay == Duration::Zero()) {
+        conn->Send(&buffer);
+      } else {
+        conn->GetEventLoop().ScheduleAfter(
+            delay, [conn, &buffer] { conn->Send(&buffer); });
+      }
     });
     client.Start();
   }
@@ -87,24 +95,33 @@ void PrintResult(const Result& result) {
 
 void benchmark(InetAddress address, std::shared_ptr<EventLoopGroup> group,
                const std::string& topic) {
-  // 32 B
+  // 32 B: many busy clients
   for (size_t c = 1024; c <= 65536; c *= 2) {
-    PrintResult(benchmark(address, group, topic, 32, c));
+    PrintResult(benchmark(address, group, topic, 32, c, 0s));
   }
-  
+
+  // 1 KiB: many clients, some busy
+  for (size_t c = 1024; c <= 65536; c *= 2) {
+    auto ignore = std::async(std::launch::async, [&] {
+      benchmark(address, group, topic, 32, c, 1s);
+    });
+    PrintResult(benchmark(address, group, topic + "(some busy)", 1 << 10, 32, 0s));
+    ignore.get();
+  }
+
   // 1 KiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(address, group, topic, 1 << 10, c));
+    PrintResult(benchmark(address, group, topic, 1 << 10, c, 0s));
   }
 
   // 32 KiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(address, group, topic, 32 << 10, c));
+    PrintResult(benchmark(address, group, topic, 32 << 10, c, 0s));
   }
 
   // 1 MiB
   for (size_t c = 1; c <= 64; c *= 2) {
-    PrintResult(benchmark(address, group, topic, 1 << 20, c));
+    PrintResult(benchmark(address, group, topic, 1 << 20, c, 0s));
   }
 }
 
@@ -113,8 +130,10 @@ int main() {
   fmt::print("start benchmarking...\n");
 
   auto group = EventLoopGroup::Create();
-  
+
   benchmark(InetAddress::Create("127.0.0.1", 1082), group, "pedronet");
-  
+  //  benchmark(InetAddress::Create("127.0.0.1", 1083), group, "asio");
+  //  benchmark(InetAddress::Create("127.0.0.1", 1084), group, "muduo");
+  //  benchmark(InetAddress::Create("127.0.0.1", 1085), group, "netty");
   return 0;
 }

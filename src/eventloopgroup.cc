@@ -15,6 +15,7 @@ uint64_t EventLoopGroup::ScheduleAfter(Duration delay, Callback cb) {
   uint64_t timer_id = loops_[loop_id].ScheduleAfter(delay, std::move(cb));
   return timer_id * loops_.size() + loop_id;
 }
+
 uint64_t EventLoopGroup::ScheduleEvery(Duration delay, Duration interval,
                                        Callback cb) {
   size_t loop_id = next();
@@ -22,6 +23,7 @@ uint64_t EventLoopGroup::ScheduleEvery(Duration delay, Duration interval,
       loops_[loop_id].ScheduleEvery(delay, interval, std::move(cb));
   return timer_id * loops_.size() + loop_id;
 }
+
 void EventLoopGroup::ScheduleCancel(uint64_t id) {
   size_t loop_id = id % loops_.size();
   size_t timer_id = id / loops_.size();

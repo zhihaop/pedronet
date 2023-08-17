@@ -33,7 +33,7 @@ void benchmark(const EventLoop::Options& options, const std::string& topic) {
     Latch latch(n);
     std::uniform_int_distribution<int> dist(500, 5000);
     bench.run("RandomDelay(500, 5000)", [&] {
-      executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
+                             executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
                              [&] { latch.CountDown(); });
     });
     latch.Await();
@@ -52,7 +52,7 @@ void benchmark(const EventLoop::Options& options, const std::string& topic) {
   {
     Latch latch(n);
     std::uniform_int_distribution<int> dist(500, 1000);
-    bench.run("RandomDelay(500, 5000)", [&] {
+bench.run("RandomDelay(500, 5000)", [&] {
       executor.ScheduleAfter(Duration::Milliseconds(dist(rnd)),
                              [&] { latch.CountDown(); });
     });

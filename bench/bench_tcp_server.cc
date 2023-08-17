@@ -20,7 +20,7 @@ int main() {
   pedronet::logger::SetLevel(Logger::Level::kWarn);
 
   Logger logger("bench");
-  logger.SetLevel(Logger::Level::kTrace);
+  logger.SetLevel(Logger::Level::kWarn);
 
   auto boss_group = EventLoopGroup::Create(1);
   auto worker_group = EventLoopGroup::Create();
