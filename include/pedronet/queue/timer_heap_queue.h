@@ -6,6 +6,7 @@
 #include "pedrolib/executor/executor.h"
 #include "pedronet/channel/timer_channel.h"
 #include "pedronet/queue/timer_queue.h"
+#include "pedronet/core/spinlock.h"
 
 namespace pedronet {
 
@@ -46,7 +47,7 @@ class TimerHeapQueue final : public TimerQueue {
   std::atomic_uint64_t counter_{};
   std::queue<std::shared_ptr<const Entry>> expires_;
 
-  std::mutex mu_;
+  SpinLock mu_;
   std::priority_queue<Timeout> queue_;
   std::unordered_map<uint64_t, std::shared_ptr<const Entry>> table_;
 };

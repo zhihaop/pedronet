@@ -42,13 +42,13 @@ void benchmark(const EventLoopOptions& options, const std::string& topic) {
   bench.batch(1);
 
   std::mt19937_64 rnd(time(nullptr));
-  benchmark(options, "RandomDelay(500, 500000)", bench, [&] {
-    thread_local std::uniform_int_distribution<int> dist(500, 50000);
+  benchmark(options, "RandomDelay(500, 5000)", bench, [&] {
+    thread_local std::uniform_int_distribution<int> dist(500, 5000);
     return dist(rnd);
   });
 
-  benchmark(options, "RandomDelay(500, 5000)", bench, [&] {
-    thread_local std::uniform_int_distribution<int> dist(500, 5000);
+  benchmark(options, "RandomDelay(500, 3000)", bench, [&] {
+    thread_local std::uniform_int_distribution<int> dist(500, 3000);
     return dist(rnd);
   });
   
