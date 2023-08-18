@@ -315,40 +315,28 @@ Error EpollSelector::Wait(Duration timeout, SelectChannels *selected) {
 void EventLoop::Loop() {
   PEDRONET_TRACE("EventLoop::Loop() running");
 
-  // Bind offset thread to event loop.
-  auto &offset = core::Thread::Current();
-  offset.BindEventLoop(this);
-	
-  SelectChannels selected;
-  while (state()) {
-    // Wait for incoming events.
-    auto err = selector_->Wait(kSelectTimeout, &selected);
-    if (!err.Empty()) {
+  auto& current = core::Thread::Current();
+  current.BindEventLoop(this);
+
+  while (state_ & kLooping) {
+    Error err = selector_->Wait(options_.select_timeout);
+    if (err != Error::kOk) {
       PEDRONET_ERROR("failed to call selector_.Wait(): {}", err);
       continue;
     }
+    Timestamp now = Timestamp::Now();
 
-    // Process events.
-    size_t n_events = selected.channels.size();
-    for (size_t i = 0; i < n_events; ++i) {
-      Channel *ch = selected.channels[i];
-      ReceiveEvents event = selected.events[i];
-      ch->HandleEvents(event, selected.now);
+    size_t n = selector_->Size();
+    for (size_t i = 0; i < n; ++i) {
+      auto [ch, ev] = selector_->Get(i);
+      if (!selector_->Contain(ch)) {
+        continue;
+      }
+      ch->HandleEvents(ev, now);
     }
-
-    // Process callbacks.
-    std::unique_lock<std::mutex> lock(mu_);
-    std::swap(running_tasks_, pending_tasks_);
-    lock.unlock();
-
-    for (auto &task : running_tasks_) {
-      task();
-    }
-
-    running_tasks_.clear();
   }
 
-  offset.UnbindEventLoop(this);
+  current.UnbindEventLoop(this);
 }
 ```
 

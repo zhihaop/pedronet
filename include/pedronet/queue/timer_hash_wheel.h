@@ -22,7 +22,7 @@ class TimerHashWheel : public TimerQueue {
   };
 
   class Bucket {
-    SpinLock mu_{};
+    mutable SpinLock mu_{};
     std::map<uint64_t, std::vector<uint64_t>> queue_;
 
    public:
@@ -52,31 +52,74 @@ class TimerHashWheel : public TimerQueue {
   };
 
   [[nodiscard]] uint64_t GetTicks(Timestamp ts) const {
-    return ts.usecs / options_.tick_unit.usecs;
+    return ts.usecs / tick_.usecs;
   }
 
   [[nodiscard]] uint64_t GetRounds(Timestamp ts) const {
-    return ts.usecs / options_.tick_unit.usecs / options_.buckets;
+    return ts.usecs / tick_.usecs / buckets_.size();
   }
 
-  [[nodiscard]] Timestamp GetWakeUp(Timestamp expire) const {
-    expire.usecs =
-        expire.usecs / options_.tick_unit.usecs * options_.tick_unit.usecs;
-    return expire;
+  std::shared_ptr<Entry> GetEntry(uint64_t id) {
+    std::lock_guard guard{mu_};
+    auto it = table_.find(id);
+    if (it == table_.end()) {
+      return nullptr;
+    }
+    return it->second;
+  }
+
+  void SetEntry(uint64_t id, std::shared_ptr<Entry> entry) {
+    std::lock_guard guard{mu_};
+    table_[id] = std::move(entry);
+  }
+
+  void ProcessBuckets(Timestamp now, size_t source_bucket,
+                      size_t target_bucket) {
+    uint64_t rounds = GetRounds(now);
+    std::vector<uint64_t> entries;
+
+    for (size_t i = source_bucket; i <= target_bucket; ++i) {
+      auto& bucket = buckets_[i];
+      entries.clear();
+      while (bucket.Pop(rounds, entries)) {
+        for (auto& id : entries) {
+          auto timer = GetEntry(id);
+          if (timer == nullptr) {
+            continue;
+          }
+
+          if (timer->interval <= Duration::Zero()) {
+            Cancel(id);
+          } else {
+            Timestamp expire = now + timer->interval;
+            uint64_t ticks = GetTicks(expire);
+            timer->rounds = GetRounds(expire);
+            buckets_[ticks % buckets_.size()].Add(timer->rounds, timer->id);
+          }
+
+          timer->callback();
+        }
+      }
+    }
+  }
+
+  void WakeUp(Timestamp expire) {
+    expire.usecs = expire.usecs / tick_.usecs * tick_.usecs;
+    channel_->WakeUpAt(expire);
   }
 
  public:
   struct Options {
-    Duration tick_unit = Duration::Milliseconds(10);
-    size_t buckets = 6000;
+    Duration tick = Duration::Milliseconds(100);
+    size_t buckets = 600;
   };
 
-  TimerHashWheel(TimerChannel* channel, Options options)
-      : channel_(channel),
+  TimerHashWheel(TimerChannel* channel, const Options& options)
+      : tick_(options.tick),
+        channel_(channel),
         last_(Timestamp::Now()),
-        buckets_(options.buckets),
-        options_(std::move(options)) {
-    for (int i = 0; i < options_.buckets; ++i) {
+        buckets_(options.buckets) {
+    for (int i = 0; i < buckets_.capacity(); ++i) {
       buckets_.emplace_back();
     }
     channel_->WakeUpAt(last_);
@@ -85,28 +128,24 @@ class TimerHashWheel : public TimerQueue {
   explicit TimerHashWheel(TimerChannel* channel)
       : TimerHashWheel(channel, Options{}) {}
 
-  std::shared_ptr<Entry> Add(uint64_t id, const Duration& delay,
-                             const Duration& interval, Callback callback) {
+  uint64_t Add(Duration delay, Duration interval, Callback callback) override {
+    uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
+
     Timestamp expired = Timestamp::Now() + delay;
     uint64_t ticks = GetTicks(expired);
+    uint64_t rounds = GetRounds(expired);
     size_t b = ticks % buckets_.size();
 
     auto entry = std::make_shared<Entry>();
     entry->id = id;
-    entry->rounds = GetRounds(expired);
+    entry->rounds = rounds;
     entry->interval = interval;
     entry->callback = std::move(callback);
 
-    buckets_[b].Add(entry->rounds, entry->id);
-    return entry;
-  }
+    SetEntry(id, std::move(entry));
+    buckets_[b].Add(rounds, id);
 
-  uint64_t Add(Duration delay, Duration interval, Callback callback) override {
-    uint64_t id = counter_.fetch_add(1, std::memory_order_relaxed) + 1;
-    auto ptr = Add(id, delay, interval, std::move(callback));
-
-    std::lock_guard guard{mu_};
-    table_[id] = ptr;
+    WakeUp(expired);
     return id;
   }
 
@@ -117,65 +156,34 @@ class TimerHashWheel : public TimerQueue {
 
   void Process() override {
     Timestamp now = Timestamp::Now();
-    uint64_t last_ticks = GetTicks(last_);
-    uint64_t next_ticks = GetTicks(now) + 1;
-    uint64_t rounds = GetRounds(now);
-    last_ = now;
+    uint64_t t1 = GetTicks(last_);
+    uint64_t t2 = GetTicks(now);
 
-    auto ProcessExpired = [&](uint64_t id) {
-      std::unique_lock lock{mu_};
-      auto it = table_.find(id);
-      if (it == table_.end()) {
-        return;
-      }
-
-      auto timer = it->second;
-      if (timer->interval <= Duration::Zero()) {
-        table_.erase(it);
+    if (t2 - t1 < buckets_.size()) {
+      size_t b1 = t1 % buckets_.size();
+      size_t b2 = t2 % buckets_.size();
+      if (b1 <= b2) {
+        ProcessBuckets(now, b1, b2);
       } else {
-        Timestamp expire = now + timer->interval;
-        uint64_t expire_ticks = GetTicks(expire);
-        timer->rounds = GetRounds(expire);
-        buckets_[expire_ticks % buckets_.size()].Add(timer->rounds, timer->id);
-      }
-      lock.unlock();
-
-      timer->callback();
-    };
-
-    std::vector<uint64_t> entries;
-    if (next_ticks - last_ticks < buckets_.size()) {
-      for (size_t i = last_ticks; i != next_ticks; ++i) {
-        auto& bucket = buckets_[i % buckets_.size()];
-        entries.clear();
-        while (bucket.Pop(rounds, entries)) {
-          for (auto& entry : entries) {
-            ProcessExpired(entry);
-          }
-        }
+        ProcessBuckets(now, b1, buckets_.size() - 1);
+        ProcessBuckets(now, 0, b2);
       }
     } else {
-      for (auto& bucket : buckets_) {
-        entries.clear();
-        while (bucket.Pop(rounds, entries)) {
-          for (auto& entry : entries) {
-            ProcessExpired(entry);
-          }
-        }
-      }
+      ProcessBuckets(now, 0, buckets_.size() - 1);
     }
 
-    channel_->WakeUpAt(GetWakeUp(now + options_.tick_unit));
+    last_ = now;
+    WakeUp(now + tick_);
   }
 
  private:
+  const Duration tick_;
   TimerChannel* channel_;
 
-  Timestamp last_;
+  Timestamp last_{};
   std::atomic_uint64_t counter_{};
 
   pedrolib::StaticVector<Bucket> buckets_;
-  Options options_;
 
   SpinLock mu_;
   std::unordered_map<uint64_t, std::shared_ptr<Entry>> table_;

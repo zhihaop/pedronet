@@ -3,23 +3,22 @@
 
 #include <atomic>
 #include <thread>
+#include <pthread.h>
 
 namespace pedronet {
-class alignas(64) SpinLock {
-  std::atomic_flag lock_{};
-  std::array<char, 64 - sizeof(std::atomic_flag)> padding_;
+class SpinLock {
+  pthread_spinlock_t actual_{};
   
  public:
-  void lock() noexcept {
-    size_t n = 0;
-    while (lock_.test_and_set()) {
-      if ((++n & 127) == 0) {
-        std::this_thread::yield();
-      }
-    }
-  }
+  SpinLock() { pthread_spin_init(&actual_, PTHREAD_PROCESS_PRIVATE); }
 
-  void unlock() noexcept { lock_.clear(); }
+  ~SpinLock() { pthread_spin_destroy(&actual_); }
+  
+  void lock() noexcept { pthread_spin_lock(&actual_); }
+
+  bool try_lock() noexcept { return pthread_spin_trylock(&actual_); }
+
+  void unlock() noexcept { pthread_spin_unlock(&actual_); }
 };
 }  // namespace pedronet
 #endif  // PEDRONET_CORE_SPINLOCK_H

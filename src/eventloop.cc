@@ -9,8 +9,6 @@ void EventLoop::Loop() {
   auto& current = core::Thread::Current();
   current.BindEventLoop(this);
 
-  std::vector<SelectChannel> ready;
-
   while (state_ & kLooping) {
     Error err = selector_->Wait(options_.select_timeout);
     if (err != Error::kOk) {
@@ -20,18 +18,8 @@ void EventLoop::Loop() {
     Timestamp now = Timestamp::Now();
 
     size_t n = selector_->Size();
-    ready.clear();
-    ready.reserve(n);
-
     for (size_t i = 0; i < n; ++i) {
       auto [ch, ev] = selector_->Get(i);
-      if (!selector_->Contain(ch)) {
-        continue;
-      }
-      ready.emplace_back(ch, ev);
-    }
-
-    for (auto& [ch, ev] : ready) {
       if (!selector_->Contain(ch)) {
         continue;
       }
