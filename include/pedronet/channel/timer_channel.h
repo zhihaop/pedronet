@@ -36,8 +36,6 @@ class TimerChannel final : public Channel {
   }
 
   void WakeUpAfter(Duration duration);
-
-  int Priority() const noexcept override;
 };
 
 }  // namespace pedronet

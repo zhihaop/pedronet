@@ -36,7 +36,7 @@ void TimerChannel::WakeUpAfter(Duration duration) {
 
   for (;;) {
     int64_t us = last_wakeup_us_.load();
-    if (std::abs(usec - us) < 1000 || usec > us) {
+    if (std::abs(usec - us) < 100 || usec > us) {
       return;
     }
     if (last_wakeup_us_.compare_exchange_strong(us, usec)) {
@@ -54,9 +54,5 @@ void TimerChannel::WakeUpAfter(Duration duration) {
 
 std::string TimerChannel::String() const {
   return fmt::format("TimerChannel[fd={}]", file_.Descriptor());
-}
-
-int TimerChannel::Priority() const noexcept {
-  return priority_;
 }
 }  // namespace pedronet

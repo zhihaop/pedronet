@@ -1042,11 +1042,11 @@ void TcpClient::handleConnection(Socket socket) {
     return;
   }
 
-  connection_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
+  conn_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
 
-  connection_->OnClose([this](auto &&conn) {
+  conn_->OnClose([this](auto &&conn) {
     PEDRONET_TRACE("client disconnect: {}", *conn);
-    connection_.reset();
+    conn_.reset();
 
     state_ = State::kDisconnected;
     
@@ -1055,16 +1055,16 @@ void TcpClient::handleConnection(Socket socket) {
     }
   });
 
-  connection_->OnConnection([this](auto &&conn) {
+  conn_->OnConnection([this](auto &&conn) {
     if (connection_callback_) {
       connection_callback_(conn);
     }
   });
 
-  connection_->OnError(std::move(error_callback_));
-  connection_->OnWriteComplete(std::move(write_complete_callback_));
-  connection_->OnMessage(std::move(message_callback_));
-  connection_->Start();
+  conn_->OnError(std::move(error_callback_));
+  conn_->OnWriteComplete(std::move(write_complete_callback_));
+  conn_->OnMessage(std::move(message_callback_));
+  conn_->Start();
 }
 
 ```
@@ -1089,7 +1089,7 @@ void TcpClient::retry(Socket socket, Error reason) {
 ```cpp
 template <class BufferPtr> bool SendPackable(BufferPtr buffer) {
     if (state_ == State::kConnected) {
-        connection_->SendPackable(std::move(buffer));
+        conn_->SendPackable(std::move(buffer));
         return true;
     }
     return false;

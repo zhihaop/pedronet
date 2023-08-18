@@ -10,29 +10,41 @@ void TcpClient::handleConnection(Socket socket) {
     PEDRONET_WARN("state_ != State::kConnection, connection closed");
     return;
   }
-  connection_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
 
-  connection_->OnClose([this](auto&& conn) {
-    PEDRONET_TRACE("client disconnect: {}", *conn);
-    connection_.reset();
+  conn_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
 
-    state_ = State::kDisconnected;
-
-    if (close_callback_) {
-      close_callback_(conn);
+  class TcpClientChannelHandler final : public ChannelHandler {
+   public:
+    explicit TcpClientChannelHandler(TcpClient* client) : client_(client) {
+      handler_ = client_->builder_();
     }
-  });
-
-  connection_->OnConnection([this](auto&& conn) {
-    if (connection_callback_) {
-      connection_callback_(conn);
+    void OnRead(Timestamp now, ArrayBuffer& buffer) override {
+      handler_->OnRead(now, buffer);
     }
-  });
+    void OnWriteComplete(Timestamp now) override {
+      handler_->OnWriteComplete(now);
+    }
+    void OnError(Timestamp now, Error err) override {
+      handler_->OnError(now, err);
+    }
+    void OnConnect(const std::shared_ptr<TcpConnection>& conn,
+                   Timestamp now) override {
+      handler_->OnConnect(conn, now);
+    }
+    void OnClose(Timestamp now) override {
+      handler_->OnClose(now);
 
-  connection_->OnError(std::move(error_callback_));
-  connection_->OnWriteComplete(std::move(write_complete_callback_));
-  connection_->OnMessage(std::move(message_callback_));
-  connection_->Start();
+      client_->conn_.reset();
+      client_->state_ = State::kDisconnected;
+    }
+
+   private:
+    TcpClient* client_;
+    std::shared_ptr<ChannelHandler> handler_;
+  };
+
+  conn_->SetHandler(std::make_shared<TcpClientChannelHandler>(this));
+  conn_->Start();
 }
 
 void TcpClient::raiseConnection() {
@@ -104,8 +116,8 @@ void TcpClient::Close() {
     return;
   }
 
-  if (connection_) {
-    connection_->Close();
+  if (conn_) {
+    conn_->Close();
   }
 }
 
@@ -115,8 +127,8 @@ void TcpClient::ForceClose() {
     return;
   }
 
-  if (connection_) {
-    connection_->ForceClose();
+  if (conn_) {
+    conn_->ForceClose();
   }
 }
 void TcpClient::Shutdown() {
@@ -125,8 +137,8 @@ void TcpClient::Shutdown() {
     return;
   }
 
-  if (connection_) {
-    connection_->Shutdown();
+  if (conn_) {
+    conn_->Shutdown();
   }
 }
 void TcpClient::ForceShutdown() {
@@ -135,8 +147,8 @@ void TcpClient::ForceShutdown() {
     return;
   }
 
-  if (connection_) {
-    connection_->ForceShutdown();
+  if (conn_) {
+    conn_->ForceShutdown();
   }
 }
 }  // namespace pedronet

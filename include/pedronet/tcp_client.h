@@ -29,15 +29,10 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   EventLoopGroupPtr worker_group_;
   InetAddress address_;
   std::atomic<State> state_{State::kOffline};
-  TcpConnectionPtr connection_;
+  TcpConnectionPtr conn_;
   EventLoop* eventloop_{};
 
-  ConnectionCallback connection_callback_;
-  CloseCallback close_callback_;
-  MessageCallback message_callback_;
-  ErrorCallback error_callback_;
-  WriteCompleteCallback write_complete_callback_;
-  HighWatermarkCallback high_watermark_callback_;
+  std::function<std::shared_ptr<ChannelHandler>()> builder_;
   TcpClientOptions options_{};
 
  private:
@@ -60,45 +55,33 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
 
   void SetOptions(const TcpClientOptions& options) { options_ = options; }
 
-  void OnConnect(ConnectionCallback callback) {
-    connection_callback_ = std::move(callback);
-  }
-
-  void OnClose(CloseCallback callback) {
-    close_callback_ = std::move(callback);
-  }
-
-  void OnMessage(MessageCallback callback) {
-    message_callback_ = std::move(callback);
-  }
-
-  void OnError(ErrorCallback callback) {
-    error_callback_ = std::move(callback);
+  void SetBuilder(std::function<std::shared_ptr<ChannelHandler>()> builder) {
+    builder_ = std::move(builder);
   }
 
   [[nodiscard]] TcpConnectionPtr GetConnection() const noexcept {
-    return connection_;
+    return conn_;
   }
 
   template <class Packable>
   bool Write(Packable&& packable) {
     if (state_ == State::kConnected) {
-      connection_->SendPackable(std::forward<Packable>(packable));
+      conn_->SendPackable(std::forward<Packable>(packable));
       return true;
     }
     return false;
   }
 
-  void OnWriteComplete(WriteCompleteCallback callback) {
-    write_complete_callback_ = std::move(callback);
-  }
-
-  void OnHighWatermark(HighWatermarkCallback callback) {
-    high_watermark_callback_ = std::move(callback);
+  bool Send(std::string message) {
+    if (state_ == State::kConnected) {
+      conn_->Send(std::move(message));
+      return true;
+    }
+    return false;
   }
 
   [[nodiscard]] State GetState() const noexcept { return state_; }
-  auto GetConnection() noexcept { return connection_; }
+  auto GetConnection() noexcept { return conn_; }
 };
 }  // namespace pedronet
 

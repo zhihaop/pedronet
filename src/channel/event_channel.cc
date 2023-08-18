@@ -33,8 +33,4 @@ void EventChannel::WakeUp() {
   uint64_t val = 1;
   file_.Write(&val, sizeof(val));
 }
-
-int EventChannel::Priority() const noexcept {
-  return priority_;
-}
 }  // namespace pedronet

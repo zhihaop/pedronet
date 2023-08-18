@@ -10,6 +10,32 @@ namespace pedronet {
 
 struct Selector;
 
+struct ChannelHandler {
+  virtual void OnRead(Timestamp now, ArrayBuffer& buffer) = 0;
+  virtual void OnWriteComplete(Timestamp now) = 0;
+  virtual void OnError(Timestamp now, Error err) = 0;
+  virtual void OnConnect(const std::shared_ptr<TcpConnection>& conn,
+                         Timestamp now) = 0;
+  virtual void OnClose(Timestamp now) = 0;
+};
+
+class ChannelHandlerAdaptor : public ChannelHandler {
+ public:
+  void OnRead(Timestamp now, ArrayBuffer& buffer) override {}
+  void OnWriteComplete(Timestamp now) override {}
+  void OnError(Timestamp now, Error err) override {}
+  void OnConnect(const std::shared_ptr<TcpConnection>& conn,
+                 Timestamp now) override {
+    conn_ = conn;
+  }
+  void OnClose(Timestamp now) override { conn_.reset(); }
+  TcpConnection* GetRawConnection() { return conn_.get(); }
+  auto GetConnection() { return conn_; }
+
+ private:
+  std::shared_ptr<TcpConnection> conn_;
+};
+
 class SocketChannel final : public Socket, public Channel {
  protected:
   SelectEvents events_{SelectEvents::kNoneEvent};
@@ -62,14 +88,12 @@ class SocketChannel final : public Socket, public Channel {
   void SetWritable(bool on);
 
   Socket& GetFile() noexcept final { return *this; }
-  
+
   [[nodiscard]] const Socket& GetFile() const noexcept final { return *this; }
 
   [[nodiscard]] std::string String() const override {
     return fmt::format("SocketChannel[fd={}]", fd_);
   }
-  
-  int Priority() const noexcept override;
 };
 
 }  // namespace pedronet

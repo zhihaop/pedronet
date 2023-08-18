@@ -30,12 +30,7 @@ class TcpConnection : pedrolib::noncopyable,
  protected:
   std::atomic<State> state_{TcpConnection::State::kConnecting};
 
-  MessageCallback message_callback_{};
-  WriteCompleteCallback write_complete_callback_{};
-  HighWatermarkCallback high_watermark_callback_{};
-  ErrorCallback error_callback_;
-  CloseCallback close_callback_;
-  ConnectionCallback connection_callback_{};
+  std::shared_ptr<ChannelHandler> handler_;
   std::shared_ptr<ChannelContext> ctx_;
 
   ArrayBuffer output_;
@@ -43,7 +38,6 @@ class TcpConnection : pedrolib::noncopyable,
 
   SocketChannel channel_;
   InetAddress local_;
-  InetAddress peer_;
   EventLoop& eventloop_;
 
   void handleRead(Timestamp now);
@@ -95,10 +89,10 @@ class TcpConnection : pedrolib::noncopyable,
       return;
     }
 
-    PEDRONET_ERROR("schedule!");
     std::string clone(buf->ReadIndex(), buf->ReadableBytes());
     buf->Reset();
-    eventloop_.Schedule([this, clone = std::move(clone)]() { Send(clone); });
+    eventloop_.Schedule([self = shared_from_this(),
+                         clone = std::move(clone)]() { self->Send(clone); });
   }
 
   void Send(std::string_view buffer) {
@@ -107,33 +101,25 @@ class TcpConnection : pedrolib::noncopyable,
       return;
     }
 
-    eventloop_.Run([this, clone = std::string(buffer)] { handleSend(clone); });
+    eventloop_.Run([self = shared_from_this(), clone = std::string(buffer)] {
+      self->handleSend(clone);
+    });
   }
 
   void Send(std::string buffer) {
-    eventloop_.Run([this, clone = std::move(buffer)] { handleSend(clone); });
+    eventloop_.Run([self = shared_from_this(), clone = std::move(buffer)] {
+      self->handleSend(clone);
+    });
   }
 
-  void OnMessage(MessageCallback cb) { message_callback_ = std::move(cb); }
-
-  void OnError(ErrorCallback cb) { error_callback_ = std::move(cb); }
-
-  void OnWriteComplete(WriteCompleteCallback cb) {
-    write_complete_callback_ = std::move(cb);
+  void SetHandler(std::shared_ptr<ChannelHandler> handler) {
+    handler_ = handler;
   }
-
-  void OnHighWatermark(HighWatermarkCallback cb) {
-    high_watermark_callback_ = std::move(cb);
-  }
-
-  void OnConnection(ConnectionCallback cb) {
-    connection_callback_ = std::move(cb);
-  }
-
-  void OnClose(CloseCallback cb) { close_callback_ = std::move(cb); }
 
   const InetAddress& GetLocalAddress() const noexcept { return local_; }
-  const InetAddress& GetPeerAddress() const noexcept { return peer_; }
+  InetAddress GetPeerAddress() const noexcept {
+    return channel_.GetPeerAddress();
+  }
 
   void Close();
   void Shutdown();

@@ -56,8 +56,4 @@ void SocketChannel::HandleEvents(ReceiveEvents events, Timestamp now) {
     }
   }
 }
-
-int SocketChannel::Priority() const noexcept {
-  return priority_;
-}
 }  // namespace pedronet

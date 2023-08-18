@@ -64,7 +64,6 @@ InetAddress Socket::GetPeerAddress() const {
   auto impl = std::make_unique<InetAddressImpl>();
   socklen_t len = impl->size();
   if (::getpeername(fd_, impl->data(), &len) < 0) {
-    PEDRONET_WARN("{}::GetPeerAddress() failed: {}", *this, GetError());
     return InetAddress{};
   }
 

@@ -22,26 +22,19 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
 
   std::shared_ptr<Acceptor> acceptor_;
 
-  ConnectionCallback connection_callback_;
-  MessageCallback message_callback_;
-  WriteCompleteCallback write_complete_callback_;
-  ErrorCallback error_callback_;
-  CloseCallback close_callback_;
-  HighWatermarkCallback high_watermark_callback_;
+  std::function<std::shared_ptr<ChannelHandler>(void)> builder_;
 
   std::mutex mu_;
   std::unordered_set<std::shared_ptr<TcpConnection>> actives_;
-  
+
   TcpServerOptions options_{};
 
  public:
   TcpServer() = default;
   ~TcpServer() { Close(); }
-  
-  void SetOptions(const TcpServerOptions& options) {
-    options_ = options;
-  }
-  
+
+  void SetOptions(const TcpServerOptions& options) { options_ = options; }
+
   void SetGroup(const std::shared_ptr<EventLoopGroup>& boss,
                 const std::shared_ptr<EventLoopGroup>& worker) {
     boss_group_ = boss;
@@ -53,28 +46,9 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
   void Start();
   void Close();
 
-  void OnConnect(ConnectionCallback callback) {
-    connection_callback_ = std::move(callback);
-  }
-
-  void OnClose(CloseCallback callback) {
-    close_callback_ = std::move(callback);
-  }
-
-  void OnMessage(MessageCallback callback) {
-    message_callback_ = std::move(callback);
-  }
-
-  void OnError(ErrorCallback callback) {
-    error_callback_ = std::move(callback);
-  }
-
-  void OnWriteComplete(WriteCompleteCallback callback) {
-    write_complete_callback_ = std::move(callback);
-  }
-
-  void OnHighWatermark(HighWatermarkCallback callback) {
-    high_watermark_callback_ = std::move(callback);
+  void SetBuilder(
+      std::function<std::shared_ptr<ChannelHandler>(void)> builder) {
+    builder_ = std::move(builder);
   }
 };
 

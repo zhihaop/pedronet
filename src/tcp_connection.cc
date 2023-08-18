@@ -4,9 +4,16 @@
 namespace pedronet {
 
 void TcpConnection::Start() {
-  auto conn = shared_from_this();
+  auto self = shared_from_this();
 
-  auto handle_register = [this, conn] {
+  channel_.OnRead([self](auto events, auto now) { self->handleRead(now); });
+  channel_.OnWrite([self](auto events, auto now) { self->handleWrite(); });
+  channel_.OnClose([self](auto events, auto now) { self->handleClose(); });
+  channel_.OnError(
+      [self](auto, auto now) { self->handleError(self->channel_.GetError()); });
+  channel_.SetSelector(eventloop_.GetSelector());
+
+  auto handle_register = [this, self] {
     State s = State::kConnecting;
     if (!state_.compare_exchange_strong(s, State::kConnected)) {
       PEDRONET_ERROR("{} has been register to channel", *this);
@@ -14,21 +21,17 @@ void TcpConnection::Start() {
     }
 
     PEDRONET_INFO("handleConnection {}", *this);
-    if (connection_callback_) {
-      connection_callback_(conn);
-    }
+    handler_->OnConnect(self, Timestamp::Now());
     channel_.SetReadable(true);
   };
 
-  auto handle_deregister = [this, conn] {
+  auto handle_deregister = [this, self] {
     if (state_ != State::kDisconnected) {
       PEDRONET_ERROR("should not happened");
       return;
     }
 
-    if (close_callback_) {
-      close_callback_(conn);
-    }
+    handler_->OnClose(Timestamp::Now());
   };
 
   eventloop_.Register(&channel_, std::move(handle_register),
@@ -51,28 +54,11 @@ void TcpConnection::handleRead(Timestamp now) {
     return;
   }
 
-  if (message_callback_) {
-    message_callback_(shared_from_this(), input_, now);
-  }
+  handler_->OnRead(now, input_);
 }
 
 void TcpConnection::handleError(Error err) {
-  if (err.Empty()) {
-    // TODO(zhihaop) check why handle error
-    handleClose();
-    return;
-  }
-
-  if (error_callback_) {
-    error_callback_(shared_from_this(), err);
-    return;
-  }
-  
-  PEDRONET_ERROR("{}::handleError(): [{}]", *this, err);
-  if (err.GetCode() == EPIPE) {
-    ForceClose();
-    return;
-  }
+  handler_->OnError(Timestamp::Now(), err);
 }
 
 void TcpConnection::handleWrite() {
@@ -92,10 +78,8 @@ void TcpConnection::handleWrite() {
 
   if (output_.ReadableBytes() == 0) {
     channel_.SetWritable(false);
-    if (write_complete_callback_) {
-      write_complete_callback_(shared_from_this());
-    }
 
+    handler_->OnWriteComplete(Timestamp::Now());
     if (state_ == State::kDisconnecting) {
       channel_.CloseWrite();
     }
@@ -108,7 +92,7 @@ void TcpConnection::Close() {
     return;
   }
 
-  eventloop_.Run([this] {
+  eventloop_.Run([this, self = shared_from_this()] {
     if (output_.ReadableBytes() == 0) {
       PEDRONET_TRACE("{}::Close()", *this);
       channel_.SetWritable(false);
@@ -120,21 +104,13 @@ void TcpConnection::Close() {
 
 std::string TcpConnection::String() const {
   return fmt::format("TcpConnection[local={}, peer={}, channel={}]", local_,
-                     peer_, channel_);
+                     GetPeerAddress(), channel_);
 }
 
 TcpConnection::TcpConnection(EventLoop& eventloop, Socket socket)
     : channel_(std::move(socket)),
       local_(channel_.GetLocalAddress()),
-      peer_(channel_.GetPeerAddress()),
-      eventloop_(eventloop) {
-
-  channel_.OnRead([this](auto events, auto now) { handleRead(now); });
-  channel_.OnWrite([this](auto events, auto now) { handleWrite(); });
-  channel_.OnClose([this](auto events, auto now) { handleClose(); });
-  channel_.OnError([this](auto, auto) { handleError(channel_.GetError()); });
-  channel_.SetSelector(eventloop.GetSelector());
-}
+      eventloop_(eventloop) {}
 
 TcpConnection::~TcpConnection() {
   PEDRONET_TRACE("{}::~TcpConnection()", *this);
@@ -161,11 +137,10 @@ void TcpConnection::handleSend(std::string_view buffer) {
   if (!buffer.empty()) {
     size_t w = output_.WritableBytes();
     if (w < buffer.size()) {
-      if (high_watermark_callback_) {
-        high_watermark_callback_(shared_from_this(), buffer.size() - w);
-      }
+      // TODO(zhihaop) the buffer size may be too large.
       output_.EnsureWritable(buffer.size());
     }
+
     output_.Append(buffer.data(), buffer.size());
     channel_.SetWritable(true);
   }

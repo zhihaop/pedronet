@@ -28,8 +28,6 @@ class EventChannel final : public Channel {
   [[nodiscard]] std::string String() const override;
 
   void WakeUp();
-
-  [[nodiscard]] int Priority() const noexcept override;
 };
 }  // namespace pedronet
 

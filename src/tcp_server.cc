@@ -6,42 +6,54 @@ namespace pedronet {
 void TcpServer::Start() {
   PEDRONET_TRACE("TcpServer::Start() enter");
 
+  class TcpServerChannelHandler final : public ChannelHandler {
+   public:
+    explicit TcpServerChannelHandler(TcpServer* server) : server_(server) {
+      handler_ = server_->builder_();
+    }
+    void OnRead(Timestamp now, ArrayBuffer& buffer) override {
+      handler_->OnRead(now, buffer);
+    }
+    void OnWriteComplete(Timestamp now) override {
+      handler_->OnWriteComplete(now);
+    }
+    void OnError(Timestamp now, Error err) override {
+      handler_->OnError(now, err);
+    }
+    void OnConnect(const std::shared_ptr<TcpConnection>& conn,
+                   Timestamp now) override {
+      std::unique_lock lock(server_->mu_);
+      server_->actives_.emplace(conn);
+      lock.unlock();
+
+      conn_ = conn;
+      handler_->OnConnect(conn, now);
+    }
+    void OnClose(Timestamp now) override {
+      handler_->OnClose(now);
+
+      std::unique_lock lock(server_->mu_);
+      server_->actives_.erase(conn_);
+      lock.unlock();
+
+      conn_.reset();
+    }
+
+   private:
+    TcpServer* server_;
+    std::shared_ptr<TcpConnection> conn_;
+    std::shared_ptr<ChannelHandler> handler_;
+  };
+
   acceptor_->OnAccept([this](Socket socket) {
     PEDRONET_TRACE("TcpServer::OnAccept({})", socket);
     socket.SetOptions(options_.child_options);
-    
-    auto connection = std::make_shared<TcpConnection>(worker_group_->Next(),
-                                                      std::move(socket));
 
-    connection->OnConnection([this](const TcpConnectionPtr& conn) {
-      PEDRONET_TRACE("server raiseConnection: {}", *conn);
+    auto conn = std::make_shared<TcpConnection>(worker_group_->Next(),
+                                                std::move(socket));
 
-      std::unique_lock<std::mutex> lock(mu_);
-      actives_.emplace(conn);
-      lock.unlock();
-
-      if (connection_callback_) {
-        connection_callback_(conn);
-      }
-    });
-
-    connection->OnClose([this](const TcpConnectionPtr& conn) {
-      PEDRONET_TRACE("server disconnect: {}", *conn);
-
-      std::unique_lock<std::mutex> lock(mu_);
-      actives_.erase(conn);
-      lock.unlock();
-
-      if (close_callback_) {
-        close_callback_(conn);
-      }
-    });
-
-    connection->OnMessage(message_callback_);
-    connection->OnError(error_callback_);
-    connection->OnWriteComplete(write_complete_callback_);
-    connection->OnHighWatermark(high_watermark_callback_);
-    connection->Start();
+    conn->SetHandler(std::make_shared<TcpServerChannelHandler>(this));
+    conn->Start();
   });
 
   acceptor_->Listen();

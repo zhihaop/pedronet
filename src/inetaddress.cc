@@ -4,7 +4,7 @@
 
 namespace pedronet {
 
-InetAddress::InetAddress() : impl_(std::make_unique<InetAddressImpl>()) {}
+InetAddress::InetAddress() : impl_(nullptr) {}
 InetAddress::~InetAddress() = default;
 
 InetAddress::InetAddress(const InetAddress& other) : host_(other.host_) {
@@ -44,7 +44,7 @@ InetAddress& InetAddress::operator=(InetAddress&& other) noexcept {
 }
 
 int InetAddress::Family() const {
-  return impl_->family();
+  return impl_ ? impl_->family() : 0;
 }
 
 InetAddress InetAddress::Create(const std::string& host, uint16_t port) {
@@ -68,7 +68,7 @@ InetAddress InetAddress::CreateV6(const std::string& host, uint16_t port) {
 }
 
 bool InetAddress::IPv6() const noexcept {
-  return impl_->family() == AF_INET6;
+  return impl_ && impl_->family() == AF_INET6;
 }
 
 uint16_t InetAddress::Port() const noexcept {
