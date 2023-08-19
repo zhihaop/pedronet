@@ -16,13 +16,17 @@
 
 namespace pedronet {
 
+class TcpServerChannelHandler;
+
 class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
+  friend class TcpServerChannelHandler;
+  
   std::shared_ptr<EventLoopGroup> boss_group_;
   std::shared_ptr<EventLoopGroup> worker_group_;
 
   std::shared_ptr<Acceptor> acceptor_;
 
-  std::function<std::shared_ptr<ChannelHandler>(void)> builder_;
+  ChannelBuilder builder_;
 
   std::mutex mu_;
   std::unordered_set<std::shared_ptr<TcpConnection>> actives_;
@@ -46,10 +50,7 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
   void Start();
   void Close();
 
-  void SetBuilder(
-      std::function<std::shared_ptr<ChannelHandler>(void)> builder) {
-    builder_ = std::move(builder);
-  }
+  void SetBuilder(ChannelBuilder builder) { builder_ = std::move(builder); }
 };
 
 }  // namespace pedronet

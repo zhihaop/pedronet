@@ -15,9 +15,8 @@ void TcpClient::handleConnection(Socket socket) {
 
   class TcpClientChannelHandler final : public ChannelHandler {
    public:
-    explicit TcpClientChannelHandler(TcpClient* client) : client_(client) {
-      handler_ = client_->builder_();
-    }
+    explicit TcpClientChannelHandler(TcpClient* client) : client_(client) {}
+    
     void OnRead(Timestamp now, ArrayBuffer& buffer) override {
       handler_->OnRead(now, buffer);
     }
@@ -27,15 +26,18 @@ void TcpClient::handleConnection(Socket socket) {
     void OnError(Timestamp now, Error err) override {
       handler_->OnError(now, err);
     }
-    void OnConnect(const std::shared_ptr<TcpConnection>& conn,
-                   Timestamp now) override {
-      handler_->OnConnect(conn, now);
+    void OnConnect(Timestamp now) override {
+      handler_ = client_->builder_(client_->conn_);
+      handler_->OnConnect(now);
     }
+
     void OnClose(Timestamp now) override {
       handler_->OnClose(now);
 
       client_->conn_.reset();
       client_->state_ = State::kDisconnected;
+
+      handler_.reset();
     }
 
    private:

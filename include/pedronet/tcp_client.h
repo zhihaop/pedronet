@@ -32,7 +32,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   TcpConnectionPtr conn_;
   EventLoop* eventloop_{};
 
-  std::function<std::shared_ptr<ChannelHandler>()> builder_;
+  ChannelBuilder builder_;
   TcpClientOptions options_{};
 
  private:
@@ -55,9 +55,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
 
   void SetOptions(const TcpClientOptions& options) { options_ = options; }
 
-  void SetBuilder(std::function<std::shared_ptr<ChannelHandler>()> builder) {
-    builder_ = std::move(builder);
-  }
+  void SetBuilder(ChannelBuilder builder) { builder_ = std::move(builder); }
 
   [[nodiscard]] TcpConnectionPtr GetConnection() const noexcept {
     return conn_;

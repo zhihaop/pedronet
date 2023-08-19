@@ -6,11 +6,11 @@ namespace pedronet {
 void TcpConnection::Start() {
   auto self = shared_from_this();
 
-  channel_.OnRead([self](auto events, auto now) { self->handleRead(now); });
-  channel_.OnWrite([self](auto events, auto now) { self->handleWrite(); });
-  channel_.OnClose([self](auto events, auto now) { self->handleClose(); });
+  channel_.OnRead([this](auto events, auto now) { handleRead(now); });
+  channel_.OnWrite([this](auto events, auto now) { handleWrite(); });
+  channel_.OnClose([this](auto events, auto now) { handleClose(); });
   channel_.OnError(
-      [self](auto, auto now) { self->handleError(self->channel_.GetError()); });
+      [this](auto, auto now) { handleError(channel_.GetError()); });
   channel_.SetSelector(eventloop_.GetSelector());
 
   auto handle_register = [this, self] {
@@ -21,7 +21,7 @@ void TcpConnection::Start() {
     }
 
     PEDRONET_INFO("handleConnection {}", *this);
-    handler_->OnConnect(self, Timestamp::Now());
+    handler_->OnConnect(Timestamp::Now());
     channel_.SetReadable(true);
   };
 
@@ -58,6 +58,10 @@ void TcpConnection::handleRead(Timestamp now) {
 }
 
 void TcpConnection::handleError(Error err) {
+  if (err == Error::kOk) {
+    ForceClose();
+    return;
+  }
   handler_->OnError(Timestamp::Now(), err);
 }
 
@@ -112,9 +116,7 @@ TcpConnection::TcpConnection(EventLoop& eventloop, Socket socket)
       local_(channel_.GetLocalAddress()),
       eventloop_(eventloop) {}
 
-TcpConnection::~TcpConnection() {
-  PEDRONET_TRACE("{}::~TcpConnection()", *this);
-}
+TcpConnection::~TcpConnection() {}
 
 void TcpConnection::handleSend(std::string_view buffer) {
   State s = state_;

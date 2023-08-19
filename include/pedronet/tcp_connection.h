@@ -14,12 +14,11 @@
 
 #include <any>
 #include <memory>
+#include <utility>
 
 namespace pedronet {
 
 class TcpConnection;
-
-struct ChannelContext {};
 
 class TcpConnection : pedrolib::noncopyable,
                       pedrolib::nonmovable,
@@ -31,7 +30,6 @@ class TcpConnection : pedrolib::noncopyable,
   std::atomic<State> state_{TcpConnection::State::kConnecting};
 
   std::shared_ptr<ChannelHandler> handler_;
-  std::shared_ptr<ChannelContext> ctx_;
 
   ArrayBuffer output_;
   ArrayBuffer input_;
@@ -50,9 +48,6 @@ class TcpConnection : pedrolib::noncopyable,
   TcpConnection(EventLoop& eventloop, Socket socket);
 
   ~TcpConnection();
-
-  void SetContext(const std::shared_ptr<ChannelContext>& ctx) { ctx_ = ctx; }
-  const auto& GetContext() const noexcept { return ctx_; }
 
   auto& GetSocket() noexcept { return channel_.GetFile(); }
 
@@ -113,7 +108,7 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   void SetHandler(std::shared_ptr<ChannelHandler> handler) {
-    handler_ = handler;
+    handler_ = std::move(handler);
   }
 
   const InetAddress& GetLocalAddress() const noexcept { return local_; }

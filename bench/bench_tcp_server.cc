@@ -20,10 +20,10 @@ using pedronet::TcpServer;
 
 int main() {
   TcpServer server;
-  pedronet::logger::SetLevel(Logger::Level::kWarn);
+  pedronet::logger::SetLevel(Logger::Level::kInfo);
 
   Logger logger("bench");
-  logger.SetLevel(Logger::Level::kWarn);
+  logger.SetLevel(Logger::Level::kInfo);
 
   EventLoopOptions options;
   options.selector_type = pedronet::SelectorType::kEpoll;
@@ -34,29 +34,33 @@ int main() {
 
   class EchoServerHandler : public ChannelHandlerAdaptor {
    public:
-    explicit EchoServerHandler(Logger& logger) : logger_(logger) {}
+    explicit EchoServerHandler(Logger& logger,
+                               const std::weak_ptr<TcpConnection>& conn)
+
+        : ChannelHandlerAdaptor(conn), logger_(logger) {}
     void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-      GetRawConnection()->Send(&buffer);
+      auto conn = GetConnection();
+      if (conn != nullptr) {
+        conn->Send(&buffer);
+      }
     }
     void OnError(Timestamp now, Error err) override {
       logger_.Error("peer {} error: {}", *GetConnection(), err);
     }
-    void OnConnect(const std::shared_ptr<TcpConnection>& conn,
-                   Timestamp now) override {
-      logger_.Info("peer connect: {}", *conn);
-      ChannelHandlerAdaptor::OnConnect(conn, now);
+    void OnConnect(Timestamp now) override {
+      logger_.Info("peer connect: {}", *GetConnection());
     }
     void OnClose(Timestamp now) override {
       logger_.Info("peer disconnect: {}", *GetConnection());
-      ChannelHandlerAdaptor::OnClose(now);
     }
 
    private:
     Logger& logger_;
   };
 
-  server.SetBuilder(
-      [&] { return std::make_shared<EchoServerHandler>(logger); });
+  server.SetBuilder([&](std::weak_ptr<TcpConnection> conn) {
+    return std::make_shared<EchoServerHandler>(logger, conn);
+  });
 
   server.Bind(InetAddress::Create("0.0.0.0", 1082));
   server.Start();

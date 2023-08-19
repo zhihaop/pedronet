@@ -47,6 +47,69 @@ struct TestOptions {
   bool random_delay{true};
 };
 
+class EchoClientChannelHandler : public ChannelHandlerAdaptor {
+ public:
+  EchoClientChannelHandler(std::weak_ptr<TcpConnection> conn, Latch& closeLatch,
+                           Latch& connectLatch, std::mutex& mu, Result& result,
+                           TestOptions options)
+      : ChannelHandlerAdaptor(conn),
+        close_latch_(closeLatch),
+        connect_latch_(connectLatch),
+        mu_(mu),
+        result_(result),
+        options_(std::move(options)),
+        dist_(0, 1000),
+        gen_(time(nullptr)) {}
+
+  void OnRead(Timestamp now, ArrayBuffer& buffer) override {
+    auto conn = GetConnection();
+    if (conn == nullptr) {
+      return;
+    }
+
+    msg_snd_ += 1;
+    byte_snd_ += buffer.ReadableBytes();
+
+    if (options_.echo_delay == Duration::Zero()) {
+      conn->Send(&buffer);
+    } else {
+      Duration d = options_.echo_delay;
+      if (options_.random_delay) {
+        d.usecs += dist_(gen_) * 1000;
+      }
+      std::string buf(buffer.ReadIndex(), buffer.ReadableBytes());
+      buffer.Reset();
+
+      conn->GetEventLoop().ScheduleAfter(d, [conn, buf] { conn->Send(buf); });
+    }
+  }
+
+  void OnConnect(Timestamp now) override { connect_latch_.CountDown(); }
+
+  void OnClose(Timestamp now) override {
+    close_latch_.CountDown();
+
+    std::lock_guard guard{mu_};
+    result_.byte_send += byte_snd_;
+    result_.msg_send += msg_snd_;
+  }
+
+ private:
+  Latch& close_latch_;
+  Latch& connect_latch_;
+
+  std::mutex& mu_;
+  Result& result_;
+
+  TestOptions options_;
+
+  size_t msg_snd_{};
+  size_t byte_snd_{};
+
+  std::uniform_int_distribution<int> dist_;
+  std::mt19937_64 gen_;
+};
+
 Result benchmark(TestOptions options) {
   std::vector<std::shared_ptr<TcpClient>> clients(options.clients);
 
@@ -62,77 +125,12 @@ Result benchmark(TestOptions options) {
   Latch close_latch(options.clients);
   Latch connect_latch(options.clients);
 
-  class EchoClientChannelHandler : public ChannelHandlerAdaptor {
-   public:
-    EchoClientChannelHandler(Latch& closeLatch, Latch& connectLatch,
-                             std::mutex& mu, Result& result,
-                             TestOptions options)
-        : close_latch_(closeLatch),
-          connect_latch_(connectLatch),
-          mu_(mu),
-          result_(result),
-          options_(std::move(options)),
-          dist_(0, 1000),
-          gen_(time(nullptr)) {}
-
-    void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-      msg_snd_ += 1;
-      byte_snd_ += buffer.ReadableBytes();
-
-      if (options_.echo_delay == Duration::Zero()) {
-        GetRawConnection()->Send(&buffer);
-      } else {
-        Duration d = options_.echo_delay;
-        if (options_.random_delay) {
-          d.usecs += dist_(gen_) * 1000;
-        }
-        std::string buf(buffer.ReadIndex(), buffer.ReadableBytes());
-        buffer.Reset();
-
-        GetRawConnection()->GetEventLoop().ScheduleAfter(
-            d, [conn = GetRawConnection(), buf] { conn->Send(buf); });
-      }
-    }
-
-    void OnError(Timestamp now, pedrolib::Error err) override {
-      ChannelHandlerAdaptor::OnError(now, err);
-    }
-    void OnConnect(const std::shared_ptr<TcpConnection>& conn,
-                   Timestamp now) override {
-      connect_latch_.CountDown();
-      ChannelHandlerAdaptor::OnConnect(conn, now);
-    }
-    void OnClose(Timestamp now) override {
-      close_latch_.CountDown();
-      ChannelHandlerAdaptor::OnClose(now);
-
-      std::lock_guard guard{mu_};
-      result_.byte_send += byte_snd_;
-      result_.msg_send += msg_snd_;
-    }
-
-   private:
-    Latch& close_latch_;
-    Latch& connect_latch_;
-
-    std::mutex& mu_;
-    Result& result_;
-
-    TestOptions options_;
-
-    size_t msg_snd_{};
-    size_t byte_snd_{};
-
-    std::uniform_int_distribution<int> dist_;
-    std::mt19937_64 gen_;
-  };
-
   for (auto& client : clients) {
     client = std::make_shared<TcpClient>(options.address);
     client->SetGroup(group);
-    client->SetBuilder([&] {
+    client->SetBuilder([&](std::weak_ptr<TcpConnection> conn) {
       return std::make_shared<EchoClientChannelHandler>(
-          close_latch, connect_latch, mu, result, options);
+          conn, close_latch, connect_latch, mu, result, options);
     });
     client->Start();
   }
@@ -174,14 +172,14 @@ void benchmark(const InetAddress& address, const std::string& topic) {
   TestOptions options;
   options.address = address;
   options.topic = topic;
-  options.duration = 5s;
+  options.duration = 3s;
   options.random_delay = false;
   options.threads = 32;
   options.clients = 1;
   options.length = 1 << 10;
 
   // 1 KiB: many busy clients
-  for (size_t c = 1024; c < 32768; c *= 2) {
+  for (size_t c = 1; c < 32768; c *= 2) {
     TestOptions copy = options;
     copy.clients = c;
     PrintResult(benchmark(copy));
@@ -189,14 +187,14 @@ void benchmark(const InetAddress& address, const std::string& topic) {
 
   // 1 KiB: many clients, some busy
   for (size_t c = 1024; c < 32768; c *= 2) {
-    //    auto ignore = std::async(std::launch::async, [=] {
-    //      TestOptions copy = options;
-    //      copy.clients = c;
-    //      copy.random_delay = true;
-    //      copy.echo_delay = 3s;
-    //      copy.duration = 10s;
-    //      benchmark(copy);
-    //    });
+    auto ignore = std::async(std::launch::async, [=] {
+      TestOptions copy = options;
+      copy.clients = c;
+      copy.random_delay = true;
+      copy.echo_delay = 3s;
+      copy.duration = 10s;
+      benchmark(copy);
+    });
 
     TestOptions copy = options;
     copy.clients = 256;
@@ -205,7 +203,7 @@ void benchmark(const InetAddress& address, const std::string& topic) {
     std::this_thread::sleep_for(2s);
     PrintResult(benchmark(copy));
 
-    //    ignore.get();
+    ignore.get();
   }
 
   //  // 1 KiB

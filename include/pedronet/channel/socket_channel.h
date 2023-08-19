@@ -14,26 +14,26 @@ struct ChannelHandler {
   virtual void OnRead(Timestamp now, ArrayBuffer& buffer) = 0;
   virtual void OnWriteComplete(Timestamp now) = 0;
   virtual void OnError(Timestamp now, Error err) = 0;
-  virtual void OnConnect(const std::shared_ptr<TcpConnection>& conn,
-                         Timestamp now) = 0;
+  virtual void OnConnect(Timestamp now) = 0;
   virtual void OnClose(Timestamp now) = 0;
 };
 
+using ChannelBuilder = std::function<std::shared_ptr<ChannelHandler>(
+    std::weak_ptr<TcpConnection>)>;
+
 class ChannelHandlerAdaptor : public ChannelHandler {
  public:
+  explicit ChannelHandlerAdaptor(const std::weak_ptr<TcpConnection>& conn)
+      : conn_(conn) {}
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {}
   void OnWriteComplete(Timestamp now) override {}
   void OnError(Timestamp now, Error err) override {}
-  void OnConnect(const std::shared_ptr<TcpConnection>& conn,
-                 Timestamp now) override {
-    conn_ = conn;
-  }
-  void OnClose(Timestamp now) override { conn_.reset(); }
-  TcpConnection* GetRawConnection() { return conn_.get(); }
-  auto GetConnection() { return conn_; }
+  void OnConnect(Timestamp now) override {}
+  void OnClose(Timestamp now) override {}
+  auto GetConnection() { return conn_.lock(); }
 
  private:
-  std::shared_ptr<TcpConnection> conn_;
+  std::weak_ptr<TcpConnection> conn_;
 };
 
 class SocketChannel final : public Socket, public Channel {
@@ -46,14 +46,11 @@ class SocketChannel final : public Socket, public Channel {
   SelectorCallback write_callback_;
 
   Selector* selector_{};
-  int priority_{};
 
  public:
   explicit SocketChannel(Socket socket) : Socket(std::move(socket)) {}
 
   ~SocketChannel() override = default;
-
-  void SetPriority(int priority) { priority_ = priority; }
 
   void SetSelector(Selector* selector) { selector_ = selector; }
 

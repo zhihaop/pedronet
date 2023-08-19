@@ -41,6 +41,10 @@ void SocketChannel::HandleEvents(ReceiveEvents events, Timestamp now) {
     if (error_callback_) {
       error_callback_(events, now);
     }
+
+    if (events.Contains(ReceiveEvents::kInvalid)) {
+      this->Close();
+    }
   }
 
   if (events.OneOf(ReceiveEvents::kReadable, ReceiveEvents::kPriorReadable,
