@@ -20,11 +20,13 @@ namespace pedronet {
 
 class ChannelContext {
   friend class TcpConnection;
-  
+
  public:
   using Ptr = std::shared_ptr<ChannelContext>;
 
   TcpConnection* GetConnection() { return conn_; }
+  ArrayBuffer* GetOutputBuffer();
+  ArrayBuffer* GetInputBuffer();
 
  private:
   TcpConnection* conn_{};
@@ -66,6 +68,7 @@ class TcpConnection : pedrolib::noncopyable,
                       pedrolib::nonmovable,
                       public std::enable_shared_from_this<TcpConnection> {
  public:
+  friend class ChannelContext;
   enum class State { kConnected, kDisconnected, kConnecting, kDisconnecting };
 
  protected:

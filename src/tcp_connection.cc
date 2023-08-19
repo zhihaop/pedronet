@@ -206,4 +206,12 @@ void TcpConnection::handleRemove() {
   context_->conn_ = nullptr;
 }
 
+ArrayBuffer* ChannelContext::GetOutputBuffer() {
+  return conn_ ? &conn_->output_ : nullptr;
+}
+
+ArrayBuffer* ChannelContext::GetInputBuffer() {
+  return conn_ ? &conn_->input_ : nullptr;
+}
+
 }  // namespace pedronet
