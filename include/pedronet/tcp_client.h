@@ -67,15 +67,6 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
     return conn_;
   }
 
-  template <class Packable>
-  bool Write(Packable&& packable) {
-    if (state_ == State::kConnected) {
-      conn_->SendPackable(std::forward<Packable>(packable));
-      return true;
-    }
-    return false;
-  }
-
   bool Send(std::string message) {
     if (state_ == State::kConnected) {
       conn_->Send(std::move(message));

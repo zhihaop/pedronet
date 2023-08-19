@@ -105,29 +105,15 @@ class TcpConnection : pedrolib::noncopyable,
 
   void Start();
 
-  template <class Packable>
-  void SendPackable(Packable&& packable) {
-    if (EventLoop::GetEventLoop() == &eventloop_) {
-      if (GetState() != State::kConnected) {
-        return;
-      }
-      packable.Pack(&output_);
-
-      if (output_.ReadableBytes()) {
-        channel_->SetWritable(true);
-      }
-      handleWrite();
-      return;
-    }
-
-    eventloop_.Schedule(
-        [this, clone = std::forward<Packable>(packable)]() mutable {
-          SendPackable(std::forward<Packable>(clone));
-        });
-  }
-
   void Send(ArrayBuffer* buf) {
     if (EventLoop::GetEventLoop() == &eventloop_) {
+      if (buf == &output_) {
+        if (output_.ReadableBytes()) {
+          channel_->SetWritable(true);
+          handleWrite();
+        }
+        return;
+      }
       std::string_view view{buf->ReadIndex(), buf->ReadableBytes()};
       handleSend(view);
       buf->Reset();
