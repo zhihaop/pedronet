@@ -18,14 +18,6 @@ EpollSelector::~EpollSelector() = default;
 
 void EpollSelector::internalUpdate(Channel* channel, int op,
                                    SelectEvents events) {
-  if (channel_.count(channel) == 0) {
-    return;
-  }
-
-  if (op == EPOLL_CTL_DEL) {
-    channel_.erase(channel);
-  }
-
   struct epoll_event ev {};
   ev.events = events.Value();
   ev.data.ptr = channel;
@@ -36,17 +28,24 @@ void EpollSelector::internalUpdate(Channel* channel, int op,
   }
 }
 
-void EpollSelector::Add(Channel* channel, SelectEvents events) {
-  channel_.emplace(channel);
-  internalUpdate(channel, EPOLL_CTL_ADD, events);
+void EpollSelector::Add(const Channel::Ptr& channel, SelectEvents events) {
+  channel_.emplace(channel.get(), channel);
+  internalUpdate(channel.get(), EPOLL_CTL_ADD, events);
 }
 
 void EpollSelector::Update(Channel* channel, SelectEvents events) {
-  internalUpdate(channel, EPOLL_CTL_MOD, events);
+  auto it = channel_.find(channel);
+  if (it != channel_.end()) {
+    internalUpdate(channel, EPOLL_CTL_MOD, events);
+  }
 }
 
-void EpollSelector::Remove(Channel* channel) {
-  internalUpdate(channel, EPOLL_CTL_DEL, SelectEvents::kNoneEvent);
+void EpollSelector::Remove(const Channel::Ptr& channel) {
+  auto it = channel_.find(channel.get());
+  if (it != channel_.end()) {
+    internalUpdate(channel.get(), EPOLL_CTL_DEL, SelectEvents::kNoneEvent);
+    channel_.erase(channel.get());
+  }
 }
 
 Error EpollSelector::Wait(Duration timeout) {
@@ -55,7 +54,6 @@ Error EpollSelector::Wait(Duration timeout) {
                        (int)timeout.Milliseconds());
 
   len_ = std::max(0, n);
-
   if (len_ == buf_.size() && len_ < 65536) {
     buf_.resize(buf_.size() << 1);
   }
@@ -67,11 +65,16 @@ size_t EpollSelector::Size() const {
 }
 
 SelectChannel EpollSelector::Get(size_t index) const {
-  return {(Channel*)buf_[index].data.ptr, ReceiveEvents{buf_[index].events}};
+  auto* ptr = (Channel*)buf_[index].data.ptr;
+  auto it = channel_.find(ptr);
+  if (it != channel_.end()) {
+    return {it->second, ReceiveEvents{buf_[index].events}};
+  }
+  return {nullptr, ReceiveEvents{buf_[index].events}};
 }
 
-bool EpollSelector::Contain(Channel* channel) const noexcept {
-  return channel_.count(channel) != 0;
+bool EpollSelector::Contain(const Channel::Ptr& channel) const noexcept {
+  return channel_.count(channel.get()) != 0;
 }
 
 }  // namespace pedronet

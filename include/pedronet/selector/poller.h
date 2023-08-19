@@ -12,7 +12,7 @@
 namespace pedronet {
 
 class Poller : public Selector {
-  using Locator = std::pair<size_t, Channel*>;
+  using Locator = std::pair<size_t, Channel::Ptr>;
 
   bool cleanable_{};
   std::vector<struct pollfd> buf_;
@@ -37,7 +37,7 @@ class Poller : public Selector {
 
   ~Poller() override = default;
 
-  void Add(Channel* channel, SelectEvents events) override {
+  void Add(const Channel::Ptr& channel, SelectEvents events) override {
     auto& pfd = buf_.emplace_back();
     pfd.fd = channel->GetFile().Descriptor();
     pfd.events = (short)events.Value();
@@ -45,7 +45,7 @@ class Poller : public Selector {
     channels_[pfd.fd] = {buf_.size() - 1, channel};
   }
 
-  void Remove(Channel* channel) override {
+  void Remove(const Channel::Ptr& channel) override {
     int fd = channel->GetFile().Descriptor();
     auto it = channels_.find(fd);
     if (it != channels_.end()) {
@@ -62,7 +62,7 @@ class Poller : public Selector {
     }
   }
 
-  bool Contain(Channel* channel) const noexcept override {
+  bool Contain(const Channel::Ptr& channel) const noexcept override {
     return channels_.count(channel->GetFile().Descriptor());
   }
 

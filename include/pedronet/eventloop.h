@@ -9,7 +9,6 @@
 #include "pedronet/channel/channel.h"
 #include "pedronet/channel/event_channel.h"
 #include "pedronet/channel/timer_channel.h"
-#include "pedronet/core/thread.h"
 #include "pedronet/event.h"
 #include "pedronet/queue/event_queue_factory.h"
 #include "pedronet/queue/timer_queue_factory.h"
@@ -20,25 +19,26 @@ namespace pedronet {
 class EventLoop : public Executor {
   enum State {
     kLooping = 1 << 0,
+    kJoinable = 1 << 1,
   };
 
+  static EventLoop*& current() noexcept {
+    thread_local EventLoop* current = nullptr;
+    return current;
+  }
+
  public:
+  static EventLoop* GetEventLoop() noexcept { return current(); }
+
   explicit EventLoop(const EventLoopOptions& options);
 
   Selector* GetSelector() noexcept { return selector_.get(); }
 
-  void Deregister(Channel* channel);
+  void Remove(const Channel::Ptr& channel, Callback callback);
 
-  void Register(Channel* channel, Callback register_callback,
-                Callback deregister_callback);
+  void Add(const Channel::Ptr& channel, Callback callback);
 
-  bool CheckUnderLoop() const noexcept {
-    return core::Thread::Current().CheckUnderLoop(this);
-  }
-
-  size_t Size() const noexcept override;
-
-  void AssertUnderLoop() const;
+  [[nodiscard]] size_t Size() const noexcept override;
 
   void Schedule(Callback cb) override;
 
@@ -55,14 +55,12 @@ class EventLoop : public Executor {
 
   template <typename Runnable>
   void Run(Runnable&& runnable) {
-    if (CheckUnderLoop()) {
+    if (current() == this) {
       runnable();
       return;
     }
     Schedule(std::forward<Runnable>(runnable));
   }
-
-  bool Closed() const noexcept { return (state_ & kLooping) == 0; }
 
   void Close() override;
 
@@ -75,15 +73,13 @@ class EventLoop : public Executor {
 
  private:
   EventLoopOptions options_;
-  EventChannel event_channel_;
-  TimerChannel timer_channel_;
+  EventChannel::Ptr event_channel_;
+  TimerChannel::Ptr timer_channel_;
   std::unique_ptr<Selector> selector_;
   std::unique_ptr<EventQueue> event_queue_;
   std::unique_ptr<TimerQueue> timer_queue_;
 
-  std::atomic_int32_t state_{kLooping};
-  std::unordered_map<Channel*, Callback> channels_;
-
+  std::atomic_int32_t state_{};
   Latch close_latch_{1};
 };
 

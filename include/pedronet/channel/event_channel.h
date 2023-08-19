@@ -8,17 +8,12 @@
 namespace pedronet {
 
 class EventChannel final : public Channel {
-  Callback event_callback_;
-  File file_;
-  int priority_{};
-
  public:
+  using Ptr = std::shared_ptr<EventChannel>;
   EventChannel();
   ~EventChannel() override = default;
 
   void SetEventCallBack(Callback cb) { event_callback_ = std::move(cb); }
-
-  void SetPriority(int priority) { this->priority_ = priority; }
 
   void HandleEvents(ReceiveEvents event, Timestamp now) override;
 
@@ -28,6 +23,10 @@ class EventChannel final : public Channel {
   [[nodiscard]] std::string String() const override;
 
   void WakeUp();
+
+ private:
+  Callback event_callback_;
+  File file_;
 };
 }  // namespace pedronet
 

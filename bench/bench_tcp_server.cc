@@ -18,9 +18,30 @@ using pedronet::TcpConnection;
 using pedronet::TcpConnectionPtr;
 using pedronet::TcpServer;
 
+class EchoServerHandler : public ChannelHandlerAdaptor {
+ public:
+  explicit EchoServerHandler(Logger& logger,
+                             const std::weak_ptr<TcpConnection>& conn)
+      : ChannelHandlerAdaptor(conn), logger_(logger) {}
+
+  void OnRead(Timestamp now, ArrayBuffer& buffer) override {
+    auto conn = GetConnection();
+    if (conn != nullptr) {
+      conn->Send(&buffer);
+    }
+  }
+
+  void OnError(Timestamp now, Error err) override {
+    logger_.Error("peer {} error: {}", *GetConnection(), err);
+  }
+
+ private:
+  Logger& logger_;
+};
+
 int main() {
   TcpServer server;
-  pedronet::logger::SetLevel(Logger::Level::kInfo);
+  pedronet::logger::SetLevel(Logger::Level::kWarn);
 
   Logger logger("bench");
   logger.SetLevel(Logger::Level::kInfo);
@@ -32,33 +53,7 @@ int main() {
 
   server.SetGroup(boss_group, worker_group);
 
-  class EchoServerHandler : public ChannelHandlerAdaptor {
-   public:
-    explicit EchoServerHandler(Logger& logger,
-                               const std::weak_ptr<TcpConnection>& conn)
-
-        : ChannelHandlerAdaptor(conn), logger_(logger) {}
-    void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-      auto conn = GetConnection();
-      if (conn != nullptr) {
-        conn->Send(&buffer);
-      }
-    }
-    void OnError(Timestamp now, Error err) override {
-      logger_.Error("peer {} error: {}", *GetConnection(), err);
-    }
-    void OnConnect(Timestamp now) override {
-      logger_.Info("peer connect: {}", *GetConnection());
-    }
-    void OnClose(Timestamp now) override {
-      logger_.Info("peer disconnect: {}", *GetConnection());
-    }
-
-   private:
-    Logger& logger_;
-  };
-
-  server.SetBuilder([&](std::weak_ptr<TcpConnection> conn) {
+  server.SetBuilder([&](const std::weak_ptr<TcpConnection>& conn) {
     return std::make_shared<EchoServerHandler>(logger, conn);
   });
 

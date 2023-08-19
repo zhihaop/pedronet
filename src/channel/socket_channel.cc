@@ -29,7 +29,6 @@ void SocketChannel::SetReadable(bool on) {
 }
 
 void SocketChannel::HandleEvents(ReceiveEvents events, Timestamp now) {
-  PEDRONET_TRACE("{} handel events[{}]", *this, events.Value());
   if (events.Contains(ReceiveEvents::kHangUp) &&
       !events.Contains(ReceiveEvents::kReadable)) {
     if (close_callback_) {

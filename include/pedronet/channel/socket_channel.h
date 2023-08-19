@@ -11,6 +11,8 @@ namespace pedronet {
 struct Selector;
 
 struct ChannelHandler {
+  using Ptr = std::shared_ptr<ChannelHandler>;
+
   virtual void OnRead(Timestamp now, ArrayBuffer& buffer) = 0;
   virtual void OnWriteComplete(Timestamp now) = 0;
   virtual void OnError(Timestamp now, Error err) = 0;
@@ -18,8 +20,8 @@ struct ChannelHandler {
   virtual void OnClose(Timestamp now) = 0;
 };
 
-using ChannelBuilder = std::function<std::shared_ptr<ChannelHandler>(
-    std::weak_ptr<TcpConnection>)>;
+using ChannelBuilder =
+    std::function<ChannelHandler::Ptr(const std::weak_ptr<TcpConnection>&)>;
 
 class ChannelHandlerAdaptor : public ChannelHandler {
  public:
@@ -48,6 +50,8 @@ class SocketChannel final : public Socket, public Channel {
   Selector* selector_{};
 
  public:
+  using Ptr = std::shared_ptr<SocketChannel>;
+
   explicit SocketChannel(Socket socket) : Socket(std::move(socket)) {}
 
   ~SocketChannel() override = default;

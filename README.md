@@ -830,7 +830,7 @@ void TcpConnection::handleClose() {
   }
   PEDRONET_INFO("{}::handleClose()", *this);
   state_ = State::kDisconnected;
-  eventloop_.Deregister(&channel_);
+  eventloop_.Remove(&channel_);
 }
 ```
 

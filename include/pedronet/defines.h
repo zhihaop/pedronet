@@ -4,12 +4,13 @@
 #include <pedrolib/buffer/array_buffer.h>
 #include <pedrolib/buffer/buffer.h>
 #include <pedrolib/comparable.h>
+#include <pedrolib/concurrent/latch.h>
+#include <pedrolib/concurrent/spinlock.h>
 #include <pedrolib/duration.h>
 #include <pedrolib/executor/executor.h>
 #include <pedrolib/file/error.h>
 #include <pedrolib/file/file.h>
 #include <pedrolib/timestamp.h>
-#include <pedrolib/concurrent/latch.h>
 
 namespace pedronet {
 
@@ -20,10 +21,11 @@ using pedrolib::Duration;
 using pedrolib::Error;
 using pedrolib::Executor;
 using pedrolib::File;
+using pedrolib::Latch;
 using pedrolib::Logger;
 using pedrolib::RetrieveInt;
+using pedrolib::SpinLock;
 using pedrolib::Timestamp;
-using pedrolib::Latch;
 
 }  // namespace pedronet
 

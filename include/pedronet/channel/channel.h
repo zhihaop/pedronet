@@ -17,7 +17,8 @@ using Timestamp = pedrolib::Timestamp;
 using Duration = pedrolib::Duration;
 
 struct Channel : pedrolib::noncopyable, pedrolib::nonmovable {
-
+  using Ptr = std::shared_ptr<Channel>;
+  
   // For pedronet::Selector.
   virtual File& GetFile() noexcept = 0;
   [[nodiscard]] virtual const File& GetFile() const noexcept = 0;

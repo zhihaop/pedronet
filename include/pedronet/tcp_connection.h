@@ -18,8 +18,6 @@
 
 namespace pedronet {
 
-class TcpConnection;
-
 class TcpConnection : pedrolib::noncopyable,
                       pedrolib::nonmovable,
                       public std::enable_shared_from_this<TcpConnection> {
@@ -29,27 +27,27 @@ class TcpConnection : pedrolib::noncopyable,
  protected:
   std::atomic<State> state_{TcpConnection::State::kConnecting};
 
-  std::shared_ptr<ChannelHandler> handler_;
-
   ArrayBuffer output_;
   ArrayBuffer input_;
 
-  SocketChannel channel_;
+  SocketChannel::Ptr channel_;
+  ChannelHandler::Ptr handler_;
+
   InetAddress local_;
   EventLoop& eventloop_;
+
+  Latch close_latch_;
 
   void handleRead(Timestamp now);
   void handleError(Error);
   void handleWrite();
-
   void handleClose();
+  void handleRemove();
 
  public:
   TcpConnection(EventLoop& eventloop, Socket socket);
 
   ~TcpConnection();
-
-  auto& GetSocket() noexcept { return channel_.GetFile(); }
 
   State GetState() const noexcept { return state_; }
 
@@ -57,14 +55,14 @@ class TcpConnection : pedrolib::noncopyable,
 
   template <class Packable>
   void SendPackable(Packable&& packable) {
-    if (eventloop_.CheckUnderLoop()) {
+    if (EventLoop::GetEventLoop() != &eventloop_) {
       if (GetState() != State::kConnected) {
         return;
       }
       packable.Pack(&output_);
 
       if (output_.ReadableBytes()) {
-        channel_.SetWritable(true);
+        channel_->SetWritable(true);
       }
       handleWrite();
       return;
@@ -77,7 +75,7 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   void Send(ArrayBuffer* buf) {
-    if (eventloop_.CheckUnderLoop()) {
+    if (EventLoop::GetEventLoop() != &eventloop_) {
       std::string_view view{buf->ReadIndex(), buf->ReadableBytes()};
       handleSend(view);
       buf->Reset();
@@ -91,7 +89,7 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   void Send(std::string_view buffer) {
-    if (eventloop_.CheckUnderLoop()) {
+    if (EventLoop::GetEventLoop() != &eventloop_) {
       handleSend(buffer);
       return;
     }
@@ -112,8 +110,9 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   const InetAddress& GetLocalAddress() const noexcept { return local_; }
+
   InetAddress GetPeerAddress() const noexcept {
-    return channel_.GetPeerAddress();
+    return channel_->GetPeerAddress();
   }
 
   void Close();

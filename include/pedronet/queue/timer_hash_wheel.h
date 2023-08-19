@@ -6,7 +6,7 @@
 #include <map>
 
 #include "pedronet/channel/timer_channel.h"
-#include "pedronet/core/spinlock.h"
+#include "pedronet/defines.h"
 #include "pedronet/queue/timer_heap_queue.h"
 #include "pedronet/queue/timer_queue.h"
 

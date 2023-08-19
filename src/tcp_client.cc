@@ -4,6 +4,38 @@
 using pedronet::Duration;
 
 namespace pedronet {
+
+class TcpClientChannelHandler final : public ChannelHandler {
+ public:
+  explicit TcpClientChannelHandler(const std::weak_ptr<TcpConnection>& conn,
+                                   TcpClient* client)
+      : client_(client) {
+    handler_ = client_->builder_(conn);
+  }
+
+  void OnRead(Timestamp now, ArrayBuffer& buffer) override {
+    handler_->OnRead(now, buffer);
+  }
+  void OnWriteComplete(Timestamp now) override {
+    handler_->OnWriteComplete(now);
+  }
+  void OnError(Timestamp now, Error err) override {
+    handler_->OnError(now, err);
+  }
+  void OnConnect(Timestamp now) override { handler_->OnConnect(now); }
+
+  void OnClose(Timestamp now) override {
+    handler_->OnClose(now);
+
+    client_->state_ = TcpClient::State::kDisconnected;
+    client_->conn_.reset();
+  }
+
+ private:
+  TcpClient* client_;
+  std::shared_ptr<ChannelHandler> handler_;
+};
+
 void TcpClient::handleConnection(Socket socket) {
   State s = State::kConnecting;
   if (!state_.compare_exchange_strong(s, State::kConnected)) {
@@ -11,42 +43,10 @@ void TcpClient::handleConnection(Socket socket) {
     return;
   }
 
-  conn_ = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
-
-  class TcpClientChannelHandler final : public ChannelHandler {
-   public:
-    explicit TcpClientChannelHandler(TcpClient* client) : client_(client) {}
-    
-    void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-      handler_->OnRead(now, buffer);
-    }
-    void OnWriteComplete(Timestamp now) override {
-      handler_->OnWriteComplete(now);
-    }
-    void OnError(Timestamp now, Error err) override {
-      handler_->OnError(now, err);
-    }
-    void OnConnect(Timestamp now) override {
-      handler_ = client_->builder_(client_->conn_);
-      handler_->OnConnect(now);
-    }
-
-    void OnClose(Timestamp now) override {
-      handler_->OnClose(now);
-
-      client_->conn_.reset();
-      client_->state_ = State::kDisconnected;
-
-      handler_.reset();
-    }
-
-   private:
-    TcpClient* client_;
-    std::shared_ptr<ChannelHandler> handler_;
-  };
-
-  conn_->SetHandler(std::make_shared<TcpClientChannelHandler>(this));
-  conn_->Start();
+  auto conn = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
+  conn->SetHandler(std::make_shared<TcpClientChannelHandler>(conn, this));
+  conn->Start();
+  conn_ = conn;
 }
 
 void TcpClient::raiseConnection() {

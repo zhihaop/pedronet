@@ -8,20 +8,19 @@ namespace pedronet {
 Acceptor::Acceptor(EventLoop& eventloop, const InetAddress& address,
                    const SocketOptions& options)
     : address_(address),
-      channel_(Socket::Create(address.Family(), true)),
+      channel_(std::make_shared<SocketChannel>(
+          Socket::Create(address.Family(), true))),
       eventloop_(eventloop) {
   PEDRONET_TRACE("Acceptor::Acceptor()");
 
-  auto& socket = channel_.GetFile();
-  socket.SetOptions(options);
+  channel_->SetOptions(options);
+  channel_->SetSelector(eventloop.GetSelector());
 
-  channel_.SetSelector(eventloop.GetSelector());
-
-  channel_.OnRead([this](auto events, auto now) {
+  channel_->OnRead([this](auto events, auto now) {
     while (true) {
       PEDRONET_TRACE("{}::handleRead()", *this);
       Socket socket;
-      auto err = channel_.Accept(address_, &socket);
+      auto err = channel_->Accept(address_, &socket);
       if (!err.Empty()) {
         if (err.GetCode() == EAGAIN || err.GetCode() == EWOULDBLOCK) {
           break;
@@ -35,26 +34,23 @@ Acceptor::Acceptor(EventLoop& eventloop, const InetAddress& address,
     }
   });
 }
+
 std::string Acceptor::String() const {
-  return fmt::format("Acceptor[socket={}]", channel_.GetFile());
+  return fmt::format("Acceptor[socket={}]", channel_->GetFile());
 }
+
 void Acceptor::Close() {
   PEDRONET_TRACE("Acceptor::Close() enter");
   pedrolib::Latch latch(1);
-  eventloop_.Run([this, &latch] {
-    channel_.SetReadable(false);
-    channel_.SetWritable(false);
-    eventloop_.Deregister(&channel_);
-    latch.CountDown();
-  });
+  eventloop_.Remove(channel_, [&] { latch.CountDown(); });
   latch.Await();
   PEDRONET_TRACE("Acceptor::Close() exit");
 }
+
 void Acceptor::Listen() {
-  Callback callback = [this] {
-    channel_.SetReadable(true);
-    channel_.Listen();
-  };
-  eventloop_.Register(&channel_, std::move(callback), {});
+  eventloop_.Add(channel_, [this] {
+    channel_->SetReadable(true);
+    channel_->Listen();
+  });
 }
 }  // namespace pedronet

@@ -18,7 +18,7 @@ class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
   AcceptorCallback acceptor_callback_;
   InetAddress address_;
 
-  SocketChannel channel_;
+  SocketChannel::Ptr channel_;
   EventLoop& eventloop_;
 
  public:
@@ -27,7 +27,7 @@ class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
 
   ~Acceptor() { Close(); }
 
-  void Bind() { channel_.GetFile().Bind(address_); }
+  void Bind() { channel_->Bind(address_); }
 
   void OnAccept(AcceptorCallback acceptor_callback) {
     acceptor_callback_ = std::move(acceptor_callback);

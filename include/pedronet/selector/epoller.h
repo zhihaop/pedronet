@@ -20,11 +20,11 @@ class EpollSelector : public Selector {
   EpollSelector();
   ~EpollSelector() override;
 
-  void Add(Channel* channel, SelectEvents events) override;
-  void Remove(Channel* channel) override;
+  void Add(const Channel::Ptr& channel, SelectEvents events) override;
+  void Remove(const Channel::Ptr& channel) override;
   void Update(Channel* channel, SelectEvents events) override;
 
-  bool Contain(Channel* channel) const noexcept override;
+  bool Contain(const Channel::Ptr& channel) const noexcept override;
 
   Error Wait(Duration timeout) override;
   [[nodiscard]] size_t Size() const override;
@@ -34,7 +34,7 @@ class EpollSelector : public Selector {
   File fd_;
   size_t len_{};
   std::vector<struct epoll_event> buf_;
-  std::unordered_set<Channel*> channel_;
+  std::unordered_map<Channel*, Channel::Ptr> channel_;
 };
 }  // namespace pedronet
 

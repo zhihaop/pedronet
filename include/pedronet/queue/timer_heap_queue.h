@@ -1,14 +1,13 @@
 #ifndef PEDRONET_QUEUE_TIMER_QUEUE
 #define PEDRONET_QUEUE_TIMER_QUEUE
 
-#include <mutex>
+#include <pedrolib/executor/executor.h>
 #include <queue>
-#include "pedrolib/executor/executor.h"
 #include "pedronet/channel/timer_channel.h"
 #include "pedronet/queue/timer_queue.h"
-#include "pedronet/core/spinlock.h"
 
 namespace pedronet {
+
 
 class TimerHeapQueue final : public TimerQueue {
 

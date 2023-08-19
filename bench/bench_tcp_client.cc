@@ -49,9 +49,9 @@ struct TestOptions {
 
 class EchoClientChannelHandler : public ChannelHandlerAdaptor {
  public:
-  EchoClientChannelHandler(std::weak_ptr<TcpConnection> conn, Latch& closeLatch,
-                           Latch& connectLatch, std::mutex& mu, Result& result,
-                           TestOptions options)
+  EchoClientChannelHandler(const std::weak_ptr<TcpConnection>& conn,
+                           Latch& closeLatch, Latch& connectLatch,
+                           std::mutex& mu, Result& result, TestOptions options)
       : ChannelHandlerAdaptor(conn),
         close_latch_(closeLatch),
         connect_latch_(connectLatch),
@@ -128,7 +128,7 @@ Result benchmark(TestOptions options) {
   for (auto& client : clients) {
     client = std::make_shared<TcpClient>(options.address);
     client->SetGroup(group);
-    client->SetBuilder([&](std::weak_ptr<TcpConnection> conn) {
+    client->SetBuilder([&](const std::weak_ptr<TcpConnection>& conn) {
       return std::make_shared<EchoClientChannelHandler>(
           conn, close_latch, connect_latch, mu, result, options);
     });
@@ -179,7 +179,7 @@ void benchmark(const InetAddress& address, const std::string& topic) {
   options.length = 1 << 10;
 
   // 1 KiB: many busy clients
-  for (size_t c = 1; c < 32768; c *= 2) {
+  for (size_t c = 1024; c < 32768; c *= 2) {
     TestOptions copy = options;
     copy.clients = c;
     PrintResult(benchmark(copy));
@@ -206,37 +206,37 @@ void benchmark(const InetAddress& address, const std::string& topic) {
     ignore.get();
   }
 
-  //  // 1 KiB
-  //  for (size_t c = 1; c <= 64; c *= 2) {
-  //    TestOptions copy = options;
-  //    copy.clients = c;
-  //    copy.length = 1 << 10;
-  //    PrintResult(benchmark(copy));
-  //  }
-  //
-  //  // 32 KiB
-  //  for (size_t c = 1; c <= 64; c *= 2) {
-  //    TestOptions copy = options;
-  //    copy.clients = c;
-  //    copy.length = 32 << 10;
-  //    PrintResult(benchmark(copy));
-  //  }
-  //
-  //  // 1 MiB
-  //  for (size_t c = 1; c <= 64; c *= 2) {
-  //    TestOptions copy = options;
-  //    copy.clients = c;
-  //    copy.length = 1 << 20;
-  //    PrintResult(benchmark(copy));
-  //  }
+  // 1 KiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    TestOptions copy = options;
+    copy.clients = c;
+    copy.length = 1 << 10;
+    PrintResult(benchmark(copy));
+  }
+
+  // 32 KiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    TestOptions copy = options;
+    copy.clients = c;
+    copy.length = 32 << 10;
+    PrintResult(benchmark(copy));
+  }
+
+  // 1 MiB
+  for (size_t c = 1; c <= 64; c *= 2) {
+    TestOptions copy = options;
+    copy.clients = c;
+    copy.length = 1 << 20;
+    PrintResult(benchmark(copy));
+  }
 }
 
 int main() {
-  pedronet::logger::SetLevel(Logger::Level::kError);
+  pedronet::logger::SetLevel(Logger::Level::kWarn);
   fmt::print("start benchmarking...\n");
 
   benchmark(InetAddress::Create("127.0.0.1", 1082), "pedronet");
-  // benchmark(InetAddress::Create("127.0.0.1", 1083), "asio");
+  benchmark(InetAddress::Create("127.0.0.1", 1083), "asio");
   benchmark(InetAddress::Create("127.0.0.1", 1084), "muduo");
   benchmark(InetAddress::Create("127.0.0.1", 1085), "netty");
   return 0;

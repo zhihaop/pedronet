@@ -15,7 +15,11 @@
 
 namespace pedronet {
 
+class TcpClientChannelHandler;
+
 class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
+  friend class TcpClientChannelHandler;
+  
  public:
   enum class State {
     kOffline,
