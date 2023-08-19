@@ -64,9 +64,9 @@ class ChannelHandlerAdaptor : public ChannelHandler {
   ChannelContext::Ptr ctx_;
 };
 
-class TcpConnection : pedrolib::noncopyable,
-                      pedrolib::nonmovable,
-                      public std::enable_shared_from_this<TcpConnection> {
+class TcpConnection final : pedrolib::noncopyable,
+                            pedrolib::nonmovable,
+                            public std::enable_shared_from_this<TcpConnection> {
  public:
   friend class ChannelContext;
   enum class State { kConnected, kDisconnected, kConnecting, kDisconnecting };
@@ -105,43 +105,11 @@ class TcpConnection : pedrolib::noncopyable,
 
   void Start();
 
-  void Send(ArrayBuffer* buf) {
-    if (EventLoop::GetEventLoop() == &eventloop_) {
-      if (buf == &output_) {
-        if (output_.ReadableBytes()) {
-          channel_->SetWritable(true);
-          handleWrite();
-        }
-        return;
-      }
-      std::string_view view{buf->ReadIndex(), buf->ReadableBytes()};
-      handleSend(view);
-      buf->Reset();
-      return;
-    }
+  void Send(ArrayBuffer* buf);
 
-    std::string clone(buf->ReadIndex(), buf->ReadableBytes());
-    buf->Reset();
-    eventloop_.Schedule([self = shared_from_this(),
-                         clone = std::move(clone)]() { self->Send(clone); });
-  }
+  void Send(std::string_view buffer);
 
-  void Send(std::string_view buffer) {
-    if (EventLoop::GetEventLoop() == &eventloop_) {
-      handleSend(buffer);
-      return;
-    }
-
-    eventloop_.Run([self = shared_from_this(), clone = std::string(buffer)] {
-      self->handleSend(clone);
-    });
-  }
-
-  void Send(std::string buffer) {
-    eventloop_.Run([self = shared_from_this(), clone = std::move(buffer)] {
-      self->handleSend(clone);
-    });
-  }
+  void Send(std::string buffer);
 
   void SetHandler(std::shared_ptr<ChannelHandler> handler) {
     handler_ = std::move(handler);

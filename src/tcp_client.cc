@@ -17,12 +17,15 @@ class TcpClientChannelHandler final : public ChannelHandler {
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
     handler_->OnRead(now, buffer);
   }
+
   void OnWriteComplete(Timestamp now) override {
     handler_->OnWriteComplete(now);
   }
+
   void OnError(Timestamp now, Error err) override {
     handler_->OnError(now, err);
   }
+  
   void OnConnect(Timestamp now) override { handler_->OnConnect(now); }
 
   void OnClose(Timestamp now) override {
@@ -135,6 +138,7 @@ void TcpClient::ForceClose() {
     conn_->ForceClose();
   }
 }
+
 void TcpClient::Shutdown() {
   State s = State::kConnected;
   if (!state_.compare_exchange_strong(s, State::kDisconnecting)) {
@@ -145,6 +149,7 @@ void TcpClient::Shutdown() {
     conn_->Shutdown();
   }
 }
+
 void TcpClient::ForceShutdown() {
   State s = State::kConnected;
   if (!state_.compare_exchange_strong(s, State::kDisconnecting)) {
@@ -153,6 +158,13 @@ void TcpClient::ForceShutdown() {
 
   if (conn_) {
     conn_->ForceShutdown();
+  }
+}
+
+void TcpClient::Send(std::string message) {
+  auto conn = conn_;
+  if (conn) {
+    conn->Send(std::move(message));
   }
 }
 }  // namespace pedronet

@@ -206,6 +206,44 @@ void TcpConnection::handleRemove() {
   context_->conn_ = nullptr;
 }
 
+void TcpConnection::Send(ArrayBuffer* buf) {
+  if (EventLoop::GetEventLoop() == &eventloop_) {
+    if (buf == &output_) {
+      if (output_.ReadableBytes()) {
+        channel_->SetWritable(true);
+        handleWrite();
+      }
+      return;
+    }
+    std::string_view view{buf->ReadIndex(), buf->ReadableBytes()};
+    handleSend(view);
+    buf->Reset();
+    return;
+  }
+
+  std::string clone(buf->ReadIndex(), buf->ReadableBytes());
+  buf->Reset();
+  eventloop_.Schedule([self = shared_from_this(),
+                          clone = std::move(clone)]() { self->Send(clone); });
+}
+
+void TcpConnection::Send(std::string_view buffer) {
+  if (EventLoop::GetEventLoop() == &eventloop_) {
+    handleSend(buffer);
+    return;
+  }
+
+  eventloop_.Run([self = shared_from_this(), clone = std::string(buffer)] {
+    self->handleSend(clone);
+  });
+}
+
+void TcpConnection::Send(std::string buffer) {
+  eventloop_.Run([self = shared_from_this(), clone = std::move(buffer)] {
+    self->handleSend(clone);
+  });
+}
+
 ArrayBuffer* ChannelContext::GetOutputBuffer() {
   return conn_ ? &conn_->output_ : nullptr;
 }

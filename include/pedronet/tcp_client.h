@@ -67,16 +67,9 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
     return conn_;
   }
 
-  bool Send(std::string message) {
-    if (state_ == State::kConnected) {
-      conn_->Send(std::move(message));
-      return true;
-    }
-    return false;
-  }
+  [[nodiscard]] EventLoop* GetEventLoop() const noexcept { return eventloop_; }
 
-  [[nodiscard]] State GetState() const noexcept { return state_; }
-  auto GetConnection() noexcept { return conn_; }
+  void Send(std::string message);
 };
 }  // namespace pedronet
 
