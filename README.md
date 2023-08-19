@@ -859,7 +859,7 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
   HighWatermarkCallback high_watermark_callback_;
 
   std::mutex mu_;
-  std::unordered_set<std::shared_ptr<TcpConnection>> actives_;
+  std::unordered_set<std::shared_ptr<TcpConnection>> conns_;
 
 public:
   TcpServer() = default;
@@ -949,7 +949,7 @@ public:
 #### 分配连接到 EventLoop 线程
 
 一旦新的连接被接受，它就必须与 `WorkerGroup`
-中的某个事件循环绑定，该事件循环将负责该连接的所有I/O读写事件，并触发相应的回调。同时，`TcpServer` 还会将其加入 `actives_`
+中的某个事件循环绑定，该事件循环将负责该连接的所有I/O读写事件，并触发相应的回调。同时，`TcpServer` 还会将其加入 `conns_`
 中，表示所有活跃的 TCP 连接。未来将会加入一个功能：一旦活跃连接数过多，将按照某种策略拒绝连接。
 
 ```cpp
@@ -961,7 +961,7 @@ connection->OnConnection([this](const TcpConnectionPtr &conn) {
     PEDRONET_TRACE("server raiseConnection: {}", *conn);
 
     std::unique_lock<std::mutex> lock(mu_);
-    actives_.emplace(conn);
+    conns_.emplace(conn);
     lock.unlock();
 
     if (connection_callback_) {
@@ -972,7 +972,7 @@ connection->OnConnection([this](const TcpConnectionPtr &conn) {
 
 #### 关闭所有连接
 
-由于 `actives_` 记录了所有的活跃连接，我们可以很方便地使用各种策略关闭连接。但无论如何，都需要先关闭 `Acceptor`，防止新的连接加入。
+由于 `conns_` 记录了所有的活跃连接，我们可以很方便地使用各种策略关闭连接。但无论如何，都需要先关闭 `Acceptor`，防止新的连接加入。
 
 ### TcpClient 客户端
 

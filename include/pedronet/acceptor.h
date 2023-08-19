@@ -22,6 +22,8 @@ class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
   EventLoop& eventloop_;
 
  public:
+  using Ptr = std::shared_ptr<Acceptor>;
+  
   Acceptor(EventLoop& eventloop, const InetAddress& address,
            const SocketOptions& option);
 

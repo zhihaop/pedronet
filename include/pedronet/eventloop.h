@@ -27,6 +27,8 @@ class EventLoop : public Executor {
     return current;
   }
 
+  void join();
+
  public:
   static EventLoop* GetEventLoop() noexcept { return current(); }
 
@@ -66,8 +68,7 @@ class EventLoop : public Executor {
 
   void Loop();
 
-  // TODO join before exit.
-  ~EventLoop() override = default;
+  ~EventLoop() override { join(); }
 
   void Join() override;
 

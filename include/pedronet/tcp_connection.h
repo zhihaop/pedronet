@@ -45,6 +45,8 @@ class TcpConnection : pedrolib::noncopyable,
   void handleRemove();
 
  public:
+  using Ptr = std::shared_ptr<TcpConnection>;
+
   TcpConnection(EventLoop& eventloop, Socket socket);
 
   ~TcpConnection();

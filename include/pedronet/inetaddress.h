@@ -31,13 +31,11 @@ class InetAddress {
 
   static InetAddress CreateV6(const std::string& host, uint16_t port);
 
-  bool IPv6() const noexcept;
-  int Family() const;
-  uint16_t Port() const noexcept;
-
-  const std::string& Host() const noexcept { return host_; }
-
-  std::string String() const noexcept;
+  [[nodiscard]] bool IPv6() const noexcept;
+  [[nodiscard]] int Family() const;
+  [[nodiscard]] uint16_t Port() const noexcept;
+  [[nodiscard]] const std::string& Host() const noexcept { return host_; }
+  [[nodiscard]] std::string String() const noexcept;
 };
 }  // namespace pedronet
 

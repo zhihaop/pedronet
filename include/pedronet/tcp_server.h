@@ -20,16 +20,15 @@ class TcpServerChannelHandler;
 
 class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
   friend class TcpServerChannelHandler;
-  
-  std::shared_ptr<EventLoopGroup> boss_group_;
-  std::shared_ptr<EventLoopGroup> worker_group_;
 
-  std::shared_ptr<Acceptor> acceptor_;
+  EventLoopGroup::Ptr boss_group_;
+  EventLoopGroup::Ptr worker_group_;
+  Acceptor::Ptr acceptor_;
 
   ChannelBuilder builder_;
 
   std::mutex mu_;
-  std::unordered_set<std::shared_ptr<TcpConnection>> actives_;
+  std::unordered_set<TcpConnection::Ptr> conns_;
 
   TcpServerOptions options_{};
 
@@ -39,10 +38,9 @@ class TcpServer : pedrolib::noncopyable, pedrolib::nonmovable {
 
   void SetOptions(const TcpServerOptions& options) { options_ = options; }
 
-  void SetGroup(const std::shared_ptr<EventLoopGroup>& boss,
-                const std::shared_ptr<EventLoopGroup>& worker) {
-    boss_group_ = boss;
-    worker_group_ = worker;
+  void SetGroup(EventLoopGroup::Ptr boss, EventLoopGroup::Ptr worker) {
+    boss_group_ = std::move(boss);
+    worker_group_ = std::move(worker);
   }
 
   void Bind(const InetAddress& address);

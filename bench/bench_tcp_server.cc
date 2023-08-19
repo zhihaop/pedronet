@@ -15,7 +15,6 @@ using pedronet::EventLoopGroup;
 using pedronet::EventLoopOptions;
 using pedronet::InetAddress;
 using pedronet::TcpConnection;
-using pedronet::TcpConnectionPtr;
 using pedronet::TcpServer;
 
 class EchoServerHandler : public ChannelHandlerAdaptor {
@@ -25,9 +24,8 @@ class EchoServerHandler : public ChannelHandlerAdaptor {
       : ChannelHandlerAdaptor(conn), logger_(logger) {}
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-    auto conn = GetConnection();
-    if (conn != nullptr) {
-      conn->Send(&buffer);
+    if (conn_ != nullptr) {
+      conn_->Send(&buffer);
     }
   }
 
@@ -35,8 +33,13 @@ class EchoServerHandler : public ChannelHandlerAdaptor {
     logger_.Error("peer {} error: {}", *GetConnection(), err);
   }
 
+  void OnConnect(Timestamp now) override { conn_ = GetConnection().get(); }
+
+  void OnClose(Timestamp now) override { conn_ = nullptr; }
+
  private:
   Logger& logger_;
+  TcpConnection* conn_ = nullptr;
 };
 
 int main() {

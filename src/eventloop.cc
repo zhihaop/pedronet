@@ -111,15 +111,19 @@ EventLoop::EventLoop(const EventLoopOptions& options)
 }
 
 void EventLoop::Join() {
+  join();
+}
+
+size_t EventLoop::Size() const noexcept {
+  return 1;
+}
+
+void EventLoop::join() {
   if ((state_ & kJoinable) == 0) {
     return;
   }
 
   close_latch_.Await();
-}
-
-size_t EventLoop::Size() const noexcept {
-  return 1;
 }
 
 }  // namespace pedronet

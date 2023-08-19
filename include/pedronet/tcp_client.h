@@ -19,7 +19,7 @@ class TcpClientChannelHandler;
 
 class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   friend class TcpClientChannelHandler;
-  
+
  public:
   enum class State {
     kOffline,
@@ -30,13 +30,15 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
   };
 
  private:
-  EventLoopGroupPtr worker_group_;
+  EventLoopGroup::Ptr worker_group_;
+  TcpConnection::Ptr conn_;
+
   InetAddress address_;
   std::atomic<State> state_{State::kOffline};
-  TcpConnectionPtr conn_;
-  EventLoop* eventloop_{};
 
+  EventLoop* eventloop_{};
   ChannelBuilder builder_;
+
   TcpClientOptions options_{};
 
  private:
@@ -47,7 +49,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
  public:
   explicit TcpClient(InetAddress address) : address_(std::move(address)) {}
 
-  void SetGroup(EventLoopGroupPtr worker_group) {
+  void SetGroup(EventLoopGroup::Ptr worker_group) {
     worker_group_ = std::move(worker_group);
   }
 
@@ -61,7 +63,7 @@ class TcpClient : pedrolib::noncopyable, pedrolib::nonmovable {
 
   void SetBuilder(ChannelBuilder builder) { builder_ = std::move(builder); }
 
-  [[nodiscard]] TcpConnectionPtr GetConnection() const noexcept {
+  [[nodiscard]] TcpConnection::Ptr GetConnection() const noexcept {
     return conn_;
   }
 

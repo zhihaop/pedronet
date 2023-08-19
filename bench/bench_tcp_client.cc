@@ -22,7 +22,6 @@ using pedronet::InetAddress;
 using pedronet::Latch;
 using pedronet::TcpClient;
 using pedronet::TcpConnection;
-using pedronet::TcpConnectionPtr;
 using pedronet::Timestamp;
 
 struct Result {
@@ -62,8 +61,7 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
         gen_(time(nullptr)) {}
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-    auto conn = GetConnection();
-    if (conn == nullptr) {
+    if (conn_ == nullptr) {
       return;
     }
 
@@ -71,7 +69,7 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
     byte_snd_ += buffer.ReadableBytes();
 
     if (options_.echo_delay == Duration::Zero()) {
-      conn->Send(&buffer);
+      conn_->Send(&buffer);
     } else {
       Duration d = options_.echo_delay;
       if (options_.random_delay) {
@@ -80,11 +78,14 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
       std::string buf(buffer.ReadIndex(), buffer.ReadableBytes());
       buffer.Reset();
 
-      conn->GetEventLoop().ScheduleAfter(d, [conn, buf] { conn->Send(buf); });
+      conn_->GetEventLoop().ScheduleAfter(d, [conn = GetConnection(), buf] { conn->Send(buf); });
     }
   }
 
-  void OnConnect(Timestamp now) override { connect_latch_.CountDown(); }
+  void OnConnect(Timestamp now) override {
+    connect_latch_.CountDown();
+    conn_ = GetConnection().get();
+  }
 
   void OnClose(Timestamp now) override {
     close_latch_.CountDown();
@@ -92,6 +93,8 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
     std::lock_guard guard{mu_};
     result_.byte_send += byte_snd_;
     result_.msg_send += msg_snd_;
+
+    conn_ = nullptr;
   }
 
  private:
@@ -108,6 +111,8 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
 
   std::uniform_int_distribution<int> dist_;
   std::mt19937_64 gen_;
+
+  TcpConnection* conn_{nullptr};
 };
 
 Result benchmark(TestOptions options) {
@@ -172,7 +177,7 @@ void benchmark(const InetAddress& address, const std::string& topic) {
   TestOptions options;
   options.address = address;
   options.topic = topic;
-  options.duration = 3s;
+  options.duration = 5s;
   options.random_delay = false;
   options.threads = 32;
   options.clients = 1;

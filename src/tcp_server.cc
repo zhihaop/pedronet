@@ -29,13 +29,13 @@ class TcpServerChannelHandler final : public ChannelHandler {
     handler_->OnConnect(now);
 
     std::unique_lock lock(server_->mu_);
-    server_->actives_.emplace(conn_.lock());
+    server_->conns_.emplace(conn_.lock());
   }
 
   void OnClose(Timestamp now) override {
     handler_->OnClose(now);
     std::unique_lock lock(server_->mu_);
-    server_->actives_.erase(conn_.lock());
+    server_->conns_.erase(conn_.lock());
   }
 
  private:
@@ -66,10 +66,10 @@ void TcpServer::Close() {
   acceptor_->Close();
 
   std::unique_lock<std::mutex> lock(mu_);
-  for (auto& conn : actives_) {
+  for (auto& conn : conns_) {
     conn->Close();
   }
-  actives_.clear();
+  conns_.clear();
 }
 
 void TcpServer::Bind(const pedronet::InetAddress& address) {

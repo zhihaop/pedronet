@@ -10,6 +10,7 @@ namespace pedronet {
 class EventChannel final : public Channel {
  public:
   using Ptr = std::shared_ptr<EventChannel>;
+  
   EventChannel();
   ~EventChannel() override = default;
 
