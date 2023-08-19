@@ -104,7 +104,7 @@ class TcpConnection : pedrolib::noncopyable,
 
   template <class Packable>
   void SendPackable(Packable&& packable) {
-    if (EventLoop::GetEventLoop() != &eventloop_) {
+    if (EventLoop::GetEventLoop() == &eventloop_) {
       if (GetState() != State::kConnected) {
         return;
       }
@@ -124,7 +124,7 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   void Send(ArrayBuffer* buf) {
-    if (EventLoop::GetEventLoop() != &eventloop_) {
+    if (EventLoop::GetEventLoop() == &eventloop_) {
       std::string_view view{buf->ReadIndex(), buf->ReadableBytes()};
       handleSend(view);
       buf->Reset();
@@ -138,7 +138,7 @@ class TcpConnection : pedrolib::noncopyable,
   }
 
   void Send(std::string_view buffer) {
-    if (EventLoop::GetEventLoop() != &eventloop_) {
+    if (EventLoop::GetEventLoop() == &eventloop_) {
       handleSend(buffer);
       return;
     }
