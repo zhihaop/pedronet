@@ -1,5 +1,7 @@
-#include "pedronet/tcp_client.h"
+#include <utility>
+
 #include "pedronet/logger/logger.h"
+#include "pedronet/tcp_client.h"
 
 using pedronet::Duration;
 
@@ -7,10 +9,9 @@ namespace pedronet {
 
 class TcpClientChannelHandler final : public ChannelHandler {
  public:
-  explicit TcpClientChannelHandler(const std::weak_ptr<TcpConnection>& conn,
-                                   TcpClient* client)
+  explicit TcpClientChannelHandler(ChannelContext::Ptr ctx, TcpClient* client)
       : client_(client) {
-    handler_ = client_->builder_(conn);
+    handler_ = client_->builder_(std::move(ctx));
   }
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
@@ -44,7 +45,8 @@ void TcpClient::handleConnection(Socket socket) {
   }
 
   auto conn = std::make_shared<TcpConnection>(*eventloop_, std::move(socket));
-  conn->SetHandler(std::make_shared<TcpClientChannelHandler>(conn, this));
+  conn->SetHandler(std::make_shared<TcpClientChannelHandler>(
+      conn->GetChannelContext(), this));
   conn->Start();
   conn_ = conn;
 }

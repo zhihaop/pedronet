@@ -8,6 +8,7 @@ using namespace std::chrono_literals;
 using pedrolib::Logger;
 using pedrolib::Timestamp;
 using pedronet::ArrayBuffer;
+using pedronet::ChannelContext;
 using pedronet::ChannelHandlerAdaptor;
 using pedronet::EpollSelector;
 using pedronet::Error;
@@ -19,13 +20,13 @@ using pedronet::TcpServer;
 
 class EchoServerHandler : public ChannelHandlerAdaptor {
  public:
-  explicit EchoServerHandler(Logger& logger,
-                             const std::weak_ptr<TcpConnection>& conn)
-      : ChannelHandlerAdaptor(conn), logger_(logger) {}
+  explicit EchoServerHandler(Logger& logger, ChannelContext::Ptr ctx)
+      : ChannelHandlerAdaptor(std::move(ctx)), logger_(logger) {}
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-    if (conn_ != nullptr) {
-      conn_->Send(&buffer);
+    auto conn = GetConnection();
+    if (conn != nullptr) {
+      conn->Send(&buffer);
     }
   }
 
@@ -33,13 +34,8 @@ class EchoServerHandler : public ChannelHandlerAdaptor {
     logger_.Error("peer {} error: {}", *GetConnection(), err);
   }
 
-  void OnConnect(Timestamp now) override { conn_ = GetConnection().get(); }
-
-  void OnClose(Timestamp now) override { conn_ = nullptr; }
-
  private:
   Logger& logger_;
-  TcpConnection* conn_ = nullptr;
 };
 
 int main() {
@@ -56,8 +52,8 @@ int main() {
 
   server.SetGroup(boss_group, worker_group);
 
-  server.SetBuilder([&](const std::weak_ptr<TcpConnection>& conn) {
-    return std::make_shared<EchoServerHandler>(logger, conn);
+  server.SetBuilder([&](auto ctx) {
+    return std::make_shared<EchoServerHandler>(logger, std::move(ctx));
   });
 
   server.Bind(InetAddress::Create("0.0.0.0", 1082));

@@ -6,6 +6,8 @@ namespace pedronet {
 void TcpConnection::Start() {
   auto self = shared_from_this();
 
+  context_->conn_ = this;
+
   channel_->OnRead([this](auto events, auto now) { handleRead(now); });
   channel_->OnWrite([this](auto events, auto now) { handleWrite(); });
   channel_->OnClose([this](auto events, auto now) { handleClose(); });
@@ -102,6 +104,7 @@ TcpConnection::TcpConnection(EventLoop& eventloop, Socket socket)
     : channel_(std::make_shared<SocketChannel>(std::move(socket))),
       local_(channel_->GetLocalAddress()),
       eventloop_(eventloop),
+      context_(std::make_shared<ChannelContext>()),
       close_latch_(1) {}
 
 TcpConnection::~TcpConnection() {
@@ -200,6 +203,7 @@ void TcpConnection::handleRemove() {
 
   handler_->OnClose(Timestamp::Now());
   close_latch_.CountDown();
+  context_->conn_ = nullptr;
 }
 
 }  // namespace pedronet

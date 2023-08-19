@@ -15,6 +15,7 @@ using pedrolib::Duration;
 using pedrolib::Logger;
 using pedrolib::StaticVector;
 using pedronet::ArrayBuffer;
+using pedronet::ChannelContext;
 using pedronet::ChannelHandlerAdaptor;
 using pedronet::EpollSelector;
 using pedronet::EventLoopGroup;
@@ -48,10 +49,10 @@ struct TestOptions {
 
 class EchoClientChannelHandler : public ChannelHandlerAdaptor {
  public:
-  EchoClientChannelHandler(const std::weak_ptr<TcpConnection>& conn,
-                           Latch& closeLatch, Latch& connectLatch,
-                           std::mutex& mu, Result& result, TestOptions options)
-      : ChannelHandlerAdaptor(conn),
+  EchoClientChannelHandler(ChannelContext::Ptr ctx, Latch& closeLatch,
+                           Latch& connectLatch, std::mutex& mu, Result& result,
+                           TestOptions options)
+      : ChannelHandlerAdaptor(std::move(ctx)),
         close_latch_(closeLatch),
         connect_latch_(connectLatch),
         mu_(mu),
@@ -61,7 +62,8 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
         gen_(time(nullptr)) {}
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
-    if (conn_ == nullptr) {
+    auto conn = GetConnection();
+    if (conn == nullptr) {
       return;
     }
 
@@ -69,7 +71,7 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
     byte_snd_ += buffer.ReadableBytes();
 
     if (options_.echo_delay == Duration::Zero()) {
-      conn_->Send(&buffer);
+      conn->Send(&buffer);
     } else {
       Duration d = options_.echo_delay;
       if (options_.random_delay) {
@@ -78,14 +80,12 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
       std::string buf(buffer.ReadIndex(), buffer.ReadableBytes());
       buffer.Reset();
 
-      conn_->GetEventLoop().ScheduleAfter(d, [conn = GetConnection(), buf] { conn->Send(buf); });
+      conn->GetEventLoop().ScheduleAfter(
+          d, [conn = conn->shared_from_this(), buf] { conn->Send(buf); });
     }
   }
 
-  void OnConnect(Timestamp now) override {
-    connect_latch_.CountDown();
-    conn_ = GetConnection().get();
-  }
+  void OnConnect(Timestamp now) override { connect_latch_.CountDown(); }
 
   void OnClose(Timestamp now) override {
     close_latch_.CountDown();
@@ -93,8 +93,6 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
     std::lock_guard guard{mu_};
     result_.byte_send += byte_snd_;
     result_.msg_send += msg_snd_;
-
-    conn_ = nullptr;
   }
 
  private:
@@ -111,8 +109,6 @@ class EchoClientChannelHandler : public ChannelHandlerAdaptor {
 
   std::uniform_int_distribution<int> dist_;
   std::mt19937_64 gen_;
-
-  TcpConnection* conn_{nullptr};
 };
 
 Result benchmark(TestOptions options) {
@@ -133,9 +129,9 @@ Result benchmark(TestOptions options) {
   for (auto& client : clients) {
     client = std::make_shared<TcpClient>(options.address);
     client->SetGroup(group);
-    client->SetBuilder([&](const std::weak_ptr<TcpConnection>& conn) {
+    client->SetBuilder([&](auto ctx) {
       return std::make_shared<EchoClientChannelHandler>(
-          conn, close_latch, connect_latch, mu, result, options);
+          std::move(ctx), close_latch, connect_latch, mu, result, options);
     });
     client->Start();
   }

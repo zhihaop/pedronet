@@ -16,7 +16,7 @@ Acceptor::Acceptor(EventLoop& eventloop, const InetAddress& address,
   channel_->SetOptions(options);
   channel_->SetSelector(eventloop.GetSelector());
 
-  channel_->OnRead([this](auto events, auto now) {
+  channel_->OnRead([this](ReceiveEvents events, Timestamp now) {
     while (true) {
       PEDRONET_TRACE("{}::handleRead()", *this);
       Socket socket;

@@ -30,12 +30,13 @@ void EventLoop::Loop() {
     size_t n = selector_->Size();
     for (size_t i = 0; i < n; ++i) {
       auto [ch, ev] = selector_->Get(i);
-      if (!selector_->Contain(ch)) {
+      if (ch == nullptr) {
         continue;
       }
       ch->HandleEvents(ev, now);
     }
   }
+  
   current() = nullptr;
 }
 
@@ -124,6 +125,11 @@ void EventLoop::join() {
   }
 
   close_latch_.Await();
+}
+
+EventLoop*& EventLoop::current() noexcept {
+  thread_local EventLoop* current = nullptr;
+  return current;
 }
 
 }  // namespace pedronet

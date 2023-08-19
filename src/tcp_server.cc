@@ -1,16 +1,15 @@
 #include <memory>
 
-#include "pedronet/tcp_server.h"
 #include "pedronet/logger/logger.h"
+#include "pedronet/tcp_server.h"
 
 namespace pedronet {
 
 class TcpServerChannelHandler final : public ChannelHandler {
  public:
-  explicit TcpServerChannelHandler(const std::weak_ptr<TcpConnection>& conn,
-                                   TcpServer* server)
-      : conn_(conn), server_(server) {
-    handler_ = server_->builder_(conn);
+  explicit TcpServerChannelHandler(ChannelContext::Ptr ctx, TcpServer* server)
+      : ctx_(ctx), server_(server) {
+    handler_ = server_->builder_(std::move(ctx));
   }
 
   void OnRead(Timestamp now, ArrayBuffer& buffer) override {
@@ -29,18 +28,18 @@ class TcpServerChannelHandler final : public ChannelHandler {
     handler_->OnConnect(now);
 
     std::unique_lock lock(server_->mu_);
-    server_->conns_.emplace(conn_.lock());
+    server_->conns_.emplace(ctx_->GetConnection()->shared_from_this());
   }
 
   void OnClose(Timestamp now) override {
     handler_->OnClose(now);
     std::unique_lock lock(server_->mu_);
-    server_->conns_.erase(conn_.lock());
+    server_->conns_.erase(ctx_->GetConnection()->shared_from_this());
   }
 
  private:
   TcpServer* server_;
-  std::weak_ptr<TcpConnection> conn_;
+  ChannelContext::Ptr ctx_;
   std::shared_ptr<ChannelHandler> handler_;
 };
 
@@ -51,9 +50,10 @@ void TcpServer::Start() {
     PEDRONET_TRACE("TcpServer::OnAccept({})", socket);
     socket.SetOptions(options_.child_options);
 
-    auto conn = std::make_shared<TcpConnection>(
-        worker_group_->Next(), std::move(socket));
-    conn->SetHandler(std::make_shared<TcpServerChannelHandler>(conn, this));
+    auto conn = std::make_shared<TcpConnection>(worker_group_->Next(),
+                                                std::move(socket));
+    conn->SetHandler(std::make_shared<TcpServerChannelHandler>(
+        conn->GetChannelContext(), this));
     conn->Start();
   });
 

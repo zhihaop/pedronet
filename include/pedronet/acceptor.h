@@ -13,7 +13,9 @@ class EventLoop;
 
 using AcceptorCallback = std::function<void(Socket)>;
 
-class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
+class Acceptor : pedrolib::noncopyable,
+                 pedrolib::nonmovable,
+                 public std::enable_shared_from_this<Acceptor> {
  protected:
   AcceptorCallback acceptor_callback_;
   InetAddress address_;
@@ -23,7 +25,7 @@ class Acceptor : pedrolib::noncopyable, pedrolib::nonmovable {
 
  public:
   using Ptr = std::shared_ptr<Acceptor>;
-  
+
   Acceptor(EventLoop& eventloop, const InetAddress& address,
            const SocketOptions& option);
 

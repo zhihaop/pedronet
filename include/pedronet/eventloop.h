@@ -22,10 +22,7 @@ class EventLoop : public Executor {
     kJoinable = 1 << 1,
   };
 
-  static EventLoop*& current() noexcept {
-    thread_local EventLoop* current = nullptr;
-    return current;
-  }
+  static EventLoop*& current() noexcept;
 
   void join();
 

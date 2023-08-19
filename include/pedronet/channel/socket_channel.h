@@ -2,6 +2,8 @@
 #define PEDRONET_CHANNEL_SOCKET_CHANNEL_H
 
 #include <pedrolib/format/formatter.h>
+
+#include <utility>
 #include "pedronet/callbacks.h"
 #include "pedronet/channel/channel.h"
 #include "pedronet/socket.h"
@@ -9,34 +11,6 @@
 namespace pedronet {
 
 struct Selector;
-
-struct ChannelHandler {
-  using Ptr = std::shared_ptr<ChannelHandler>;
-
-  virtual void OnRead(Timestamp now, ArrayBuffer& buffer) = 0;
-  virtual void OnWriteComplete(Timestamp now) = 0;
-  virtual void OnError(Timestamp now, Error err) = 0;
-  virtual void OnConnect(Timestamp now) = 0;
-  virtual void OnClose(Timestamp now) = 0;
-};
-
-using ChannelBuilder =
-    std::function<ChannelHandler::Ptr(const std::weak_ptr<TcpConnection>&)>;
-
-class ChannelHandlerAdaptor : public ChannelHandler {
- public:
-  explicit ChannelHandlerAdaptor(const std::weak_ptr<TcpConnection>& conn)
-      : conn_(conn) {}
-  void OnRead(Timestamp now, ArrayBuffer& buffer) override {}
-  void OnWriteComplete(Timestamp now) override {}
-  void OnError(Timestamp now, Error err) override {}
-  void OnConnect(Timestamp now) override {}
-  void OnClose(Timestamp now) override {}
-  auto GetConnection() { return conn_.lock(); }
-
- private:
-  std::weak_ptr<TcpConnection> conn_;
-};
 
 class SocketChannel final : public Socket, public Channel {
  protected:
