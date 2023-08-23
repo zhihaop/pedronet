@@ -91,6 +91,7 @@ Pedronet 使用事件驱动的方式进行网络应用编程。它与以往同�
 - 写完成事件：算半个事件，表示数据已经发送到对端
 
 ### Echo Server
+**Warning**: 新版本 API 有 Breaking Changes，将会更新 README
 
 同样，我们只需要注意三个半事件，完整的代码如下。图中的 SetGroup 函数是为了设置 TcpServer 运行的事件循环组，目前我们还不需要关注这一点。
 
@@ -141,6 +142,7 @@ server.Start();
 ```
 
 ### Echo Client
+**Warning**: 新版本 API 有 Breaking Changes，将会更新 README
 
 对于客户端，同样需要关注三个半事件。在这个客户端中，当连接到服务器上时，客户端将主动给服务器打招呼 "hello"
 ，服务器收到客户端的消息后，原样转发到客户端。客户端又原样转发到服务端，如此往复。这种模式称为 Ping
