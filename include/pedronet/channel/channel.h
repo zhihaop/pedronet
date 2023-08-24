@@ -13,9 +13,6 @@
 
 namespace pedronet {
 
-using Timestamp = pedrolib::Timestamp;
-using Duration = pedrolib::Duration;
-
 struct Channel : pedrolib::noncopyable, pedrolib::nonmovable {
   using Ptr = std::shared_ptr<Channel>;
   
